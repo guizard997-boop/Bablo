@@ -1,13 +1,9 @@
-
 # -*- coding: utf-8 -*-
 """
-Бот-магазин канцтоваров + оплата QR
-Токен: 8990176397:AAFeYA_iaidYzOmTfM-4x2J40Hj6vi8QKUY
+Бот канцтоваров — меню снизу (ReplyKeyboard), не в ленте чата.
+Токен оплаты: 8990176397:AAFeYA_iaidYzOmTfM-4x2J40Hj6vi8QKUY
 Admin: 8569472160
-Реквизиты: Абдумалик К. · +996 220 979 346
-
-Клиент: каталог → товар → QR + цена
-Админ: /add /del /list /setprice /stock
+Оплата: Абдумалик К. · +996 220 979 346
 """
 
 import os
@@ -34,28 +30,29 @@ except ImportError:
 
 BOT_TOKEN = "8990176397:AAFeYA_iaidYzOmTfM-4x2J40Hj6vi8QKUY"
 ADMIN_IDS = [8569472160]
-
 PAYEE_NAME = "Абдумалик К."
 PAYEE_PHONE = "+996 220 979 346"
-CURRENCY = "KGS"  # канцтовары обычно в сомах; можно USD
-
+CURRENCY = "KGS"
 DATA_FILE = "shop_data.json"
 
-# Стартовый каталог канцтоваров (админ может менять)
 DEFAULT_PRODUCTS = [
-    {"id": "p1", "name": "Ручка шариковая синяя", "price": 25, "cat": "Ручки", "stock": 100, "desc": "Классическая шариковая ручка"},
-    {"id": "p2", "name": "Ручка гелевая чёрная", "price": 40, "cat": "Ручки", "stock": 80, "desc": "Гелевая, мягкое письмо"},
-    {"id": "p3", "name": "Карандаш HB", "price": 15, "cat": "Карандаши", "stock": 150, "desc": "Простой карандаш HB"},
-    {"id": "p4", "name": "Набор карандашей 12 шт", "price": 120, "cat": "Карандаши", "stock": 40, "desc": "Цветные карандаши 12 цветов"},
-    {"id": "p5", "name": "Тетрадь 12 л. клетка", "price": 30, "cat": "Тетради", "stock": 200, "desc": "Школьная тетрадь"},
-    {"id": "p6", "name": "Тетрадь 48 л. клетка", "price": 55, "cat": "Тетради", "stock": 120, "desc": "Тетрадь 48 листов"},
-    {"id": "p7", "name": "Блокнот А5", "price": 150, "cat": "Тетради", "stock": 50, "desc": "Блокнот на пружине А5"},
+    {"id": "p1", "name": "Ручка шариковая синяя", "price": 25, "cat": "Ручки", "stock": 100, "desc": "Шариковая ручка"},
+    {"id": "p2", "name": "Ручка гелевая чёрная", "price": 40, "cat": "Ручки", "stock": 80, "desc": "Гелевая ручка"},
+    {"id": "p3", "name": "Карандаш HB", "price": 15, "cat": "Карандаши", "stock": 150, "desc": "Простой HB"},
+    {"id": "p4", "name": "Набор карандашей 12 шт", "price": 120, "cat": "Карандаши", "stock": 40, "desc": "12 цветов"},
+    {"id": "p5", "name": "Тетрадь 12 л. клетка", "price": 30, "cat": "Тетради", "stock": 200, "desc": "12 листов"},
+    {"id": "p6", "name": "Тетрадь 48 л. клетка", "price": 55, "cat": "Тетради", "stock": 120, "desc": "48 листов"},
+    {"id": "p7", "name": "Блокнот А5", "price": 150, "cat": "Тетради", "stock": 50, "desc": "На пружине"},
     {"id": "p8", "name": "Ластик", "price": 20, "cat": "Мелочи", "stock": 100, "desc": "Мягкий ластик"},
-    {"id": "p9", "name": "Линейка 20 см", "price": 25, "cat": "Мелочи", "stock": 90, "desc": "Пластиковая линейка"},
-    {"id": "p10", "name": "Степлер + скобы", "price": 180, "cat": "Офис", "stock": 30, "desc": "Степлер мини + скобы"},
-    {"id": "p11", "name": "Папка-скоросшиватель", "price": 45, "cat": "Офис", "stock": 60, "desc": "Папка для документов"},
-    {"id": "p12", "name": "Клей-карандаш", "price": 50, "cat": "Мелочи", "stock": 70, "desc": "Клей-карандаш 15 г"},
+    {"id": "p9", "name": "Линейка 20 см", "price": 25, "cat": "Мелочи", "stock": 90, "desc": "Пластик"},
+    {"id": "p10", "name": "Степлер + скобы", "price": 180, "cat": "Офис", "stock": 30, "desc": "Мини-степлер"},
+    {"id": "p11", "name": "Папка-скоросшиватель", "price": 45, "cat": "Офис", "stock": 60, "desc": "Для документов"},
+    {"id": "p12", "name": "Клей-карандаш", "price": 50, "cat": "Мелочи", "stock": 70, "desc": "15 г"},
 ]
+
+# user_id -> состояние навигации
+# {"screen": "home"|"cats"|"prods"|"item"|"pay", "cat": str, "pid": str, "order_id": str}
+STATE = {}
 
 bot = telebot.TeleBot(BOT_TOKEN, parse_mode="HTML")
 
@@ -65,7 +62,6 @@ def load_data():
         "products": {p["id"]: p for p in DEFAULT_PRODUCTS},
         "users": {},
         "orders": {},
-        "meta": {},
     }
     if not os.path.exists(DATA_FILE):
         save_data(empty)
@@ -117,14 +113,24 @@ def money(n):
         n = float(n)
     except Exception:
         return str(n)
-    if n == int(n):
-        return f"{int(n)} {CURRENCY}"
-    return f"{n:.2f} {CURRENCY}"
+    return f"{int(n) if n == int(n) else n} {CURRENCY}"
 
 
-def categories(products):
+def get_state(uid):
+    return STATE.setdefault(uid, {"screen": "home"})
+
+
+def set_state(uid, **kwargs):
+    st = get_state(uid)
+    st.update(kwargs)
+    STATE[uid] = st
+    return st
+
+
+def categories():
+    data = load_data()
     cats = {}
-    for p in products.values():
+    for p in data["products"].values():
         if int(p.get("stock") or 0) <= 0:
             continue
         c = p.get("cat") or "Другое"
@@ -132,55 +138,52 @@ def categories(products):
     return cats
 
 
-def main_menu_kb(admin=False):
-    kb = types.InlineKeyboardMarkup()
-    kb.row(types.InlineKeyboardButton("🛍 Каталог", callback_data="menu:catalog"))
-    kb.row(types.InlineKeyboardButton("📦 Мои заказы", callback_data="menu:orders"))
-    kb.row(types.InlineKeyboardButton("💳 Реквизиты", callback_data="menu:payinfo"))
+def kb_rows(buttons, row_size=2, extra_rows=None):
+    """Собирает ReplyKeyboard из списка строк-кнопок."""
+    kb = types.ReplyKeyboardMarkup(resize_keyboard=True, row_width=row_size)
+    row = []
+    for b in buttons:
+        row.append(types.KeyboardButton(b))
+        if len(row) >= row_size:
+            kb.row(*row)
+            row = []
+    if row:
+        kb.row(*row)
+    if extra_rows:
+        for er in extra_rows:
+            kb.row(*[types.KeyboardButton(x) for x in er])
+    return kb
+
+
+def kb_home(admin=False):
+    buttons = ["🛍 Каталог", "📦 Мои заказы", "💳 Реквизиты", "ℹ️ Помощь"]
     if admin:
-        kb.row(types.InlineKeyboardButton("⚙️ Админ", callback_data="menu:admin"))
-    return kb
+        buttons.append("⚙️ Админ")
+    return kb_rows(buttons, row_size=2)
 
 
-def catalog_kb():
-    data = load_data()
-    cats = categories(data["products"])
-    kb = types.InlineKeyboardMarkup()
-    for cat in sorted(cats.keys()):
-        kb.add(types.InlineKeyboardButton(f"📁 {cat} ({len(cats[cat])})", callback_data=f"cat:{cat}"))
-    kb.row(types.InlineKeyboardButton("◀️ Меню", callback_data="menu:home"))
-    return kb
+def kb_cats():
+    cats = sorted(categories().keys())
+    labels = [f"📁 {c}" for c in cats]
+    return kb_rows(labels, row_size=2, extra_rows=[["◀️ Назад"]])
 
 
-def products_kb(cat):
-    data = load_data()
-    items = [
-        p for p in data["products"].values()
-        if (p.get("cat") or "Другое") == cat and int(p.get("stock") or 0) > 0
-    ]
-    items.sort(key=lambda x: x.get("name") or "")
-    kb = types.InlineKeyboardMarkup()
-    for p in items:
-        kb.add(
-            types.InlineKeyboardButton(
-                f"{p['name']} — {money(p['price'])}",
-                callback_data=f"prod:{p['id']}",
-            )
-        )
-    kb.row(types.InlineKeyboardButton("◀️ Каталог", callback_data="menu:catalog"))
-    return kb
+def kb_products(cat):
+    items = categories().get(cat, [])
+    items = sorted(items, key=lambda x: x.get("name") or "")
+    labels = [f"{p['name']} — {money(p['price'])}" for p in items]
+    return kb_rows(labels, row_size=1, extra_rows=[["◀️ К категориям", "🏠 Меню"]])
 
 
-def product_kb(pid):
-    kb = types.InlineKeyboardMarkup()
-    kb.row(
-        types.InlineKeyboardButton("✅ Купить / QR", callback_data=f"buy:{pid}"),
-    )
-    kb.row(types.InlineKeyboardButton("◀️ Назад", callback_data="menu:catalog"))
-    return kb
+def kb_product_actions():
+    return kb_rows(["✅ Купить / QR", "◀️ К товарам", "🏠 Меню"], row_size=1)
 
 
-def make_qr_png_bytes(text):
+def kb_after_qr():
+    return kb_rows(["✅ Я оплатил", "🛍 В каталог", "🏠 Меню"], row_size=1)
+
+
+def make_qr(text):
     qr = qrcode.QRCode(version=1, box_size=8, border=2)
     qr.add_data(text)
     qr.make(fit=True)
@@ -192,69 +195,63 @@ def make_qr_png_bytes(text):
     return buf
 
 
-def payment_qr_payload(order_id, product_name, price):
-    """Текст внутри QR — реквизиты + заказ (для сканера/ручного перевода)."""
-    return (
-        f"Оплата канцтовары\n"
-        f"Получатель: {PAYEE_NAME}\n"
-        f"Телефон: {PAYEE_PHONE}\n"
-        f"Сумма: {price} {CURRENCY}\n"
-        f"Товар: {product_name}\n"
-        f"Заказ: #{order_id}\n"
-        f"Комментарий к переводу: #{order_id}"
-    )
-
-
-def notify_admins(text, reply_markup=None):
+def notify_admins(text):
     for a in ADMIN_IDS:
         try:
-            bot.send_message(a, text, reply_markup=reply_markup)
+            bot.send_message(a, text)
         except Exception as e:
-            print("admin notify", e)
+            print("admin", e)
 
 
-# ---------- commands ----------
-@bot.message_handler(commands=["start", "help", "menu"])
+def find_product_by_button(text):
+    """Текст кнопки вида 'Название — 25 KGS'."""
+    data = load_data()
+    t = (text or "").strip()
+    for p in data["products"].values():
+        label = f"{p['name']} — {money(p['price'])}"
+        if t == label or t == p["name"]:
+            return p
+    # частичное
+    for p in data["products"].values():
+        if p["name"] in t and str(int(float(p["price"]))) in t.replace(" ", ""):
+            return p
+    return None
+
+
+# ---------- start ----------
+@bot.message_handler(commands=["start", "menu", "help"])
 def cmd_start(message):
     register(message.from_user)
+    set_state(message.from_user.id, screen="home", cat=None, pid=None, order_id=None)
     admin = is_admin(message.from_user.id)
     text = (
-        "✏️ <b>Канцтовары — магазин</b>\n\n"
-        "Выберите товар в каталоге → получите <b>цену и QR</b> для оплаты.\n"
-        f"Оплата: {PAYEE_NAME}, <code>{PAYEE_PHONE}</code>\n"
+        "✏️ <b>Канцтовары</b>\n\n"
+        "Меню внизу экрана 👇\n"
+        "Каталог → категория → товар → QR для оплаты.\n\n"
+        f"Оплата: <b>{PAYEE_NAME}</b>\n"
+        f"<code>{PAYEE_PHONE}</code>"
     )
     if admin:
         text += (
-            "\n<b>Админ:</b>\n"
+            "\n\n<b>Админ-команды:</b>\n"
             "<code>/add Название | цена | категория | описание</code>\n"
-            "<code>/del ID</code> · <code>/list</code> · <code>/orders</code>\n"
-            "<code>/setprice ID цена</code> · <code>/stock ID кол-во</code>\n"
+            "/list · /del ID · /setprice ID цена · /stock ID N · /orders"
         )
-    bot.send_message(message.chat.id, text, reply_markup=main_menu_kb(admin))
+    bot.send_message(message.chat.id, text, reply_markup=kb_home(admin))
 
 
+# ---------- admin cmds ----------
 @bot.message_handler(commands=["list"])
 def cmd_list(message):
     if not is_admin(message.from_user.id):
         return
     data = load_data()
-    lines = ["📦 <b>Товары</b>\n"]
+    lines = ["📦 <b>Товары</b>"]
     for p in sorted(data["products"].values(), key=lambda x: (x.get("cat") or "", x.get("name") or "")):
         lines.append(
-            f"<code>{p['id']}</code> · {p.get('cat')} · <b>{p['name']}</b> — "
-            f"{money(p['price'])} · остаток {p.get('stock', 0)}"
+            f"<code>{p['id']}</code> · {p.get('cat')} · {p['name']} — {money(p['price'])} · ост. {p.get('stock', 0)}"
         )
-    text = "\n".join(lines) if len(lines) > 1 else "Пусто. /add ..."
-    # chunk
-    buf = ""
-    for line in lines:
-        if len(buf) + len(line) > 3500:
-            bot.send_message(message.chat.id, buf)
-            buf = line + "\n"
-        else:
-            buf += line + "\n"
-    if buf:
-        bot.send_message(message.chat.id, buf)
+    bot.reply_to(message, "\n".join(lines) if len(lines) > 1 else "Пусто")
 
 
 @bot.message_handler(commands=["add"])
@@ -262,35 +259,23 @@ def cmd_add(message):
     if not is_admin(message.from_user.id):
         return
     raw = (message.text or "").replace("/add", "", 1).strip()
-    # name | price | cat | desc
     parts = [x.strip() for x in raw.split("|")]
     if len(parts) < 2:
-        bot.reply_to(
-            message,
-            "Формат:\n<code>/add Ручка синяя | 25 | Ручки | Шариковая</code>\n"
-            "Минимум: название | цена",
-        )
+        bot.reply_to(message, "Формат:\n<code>/add Ручка | 25 | Ручки | описание</code>")
         return
     name = parts[0]
     try:
         price = float(parts[1].replace(",", ".").replace(" ", ""))
     except ValueError:
-        bot.reply_to(message, "Цена — число.")
+        bot.reply_to(message, "Цена — число")
         return
     cat = parts[2] if len(parts) > 2 and parts[2] else "Другое"
     desc = parts[3] if len(parts) > 3 else ""
     pid = "p" + uuid.uuid4().hex[:6]
     data = load_data()
-    data["products"][pid] = {
-        "id": pid,
-        "name": name,
-        "price": price,
-        "cat": cat,
-        "stock": 50,
-        "desc": desc,
-    }
+    data["products"][pid] = {"id": pid, "name": name, "price": price, "cat": cat, "stock": 50, "desc": desc}
     save_data(data)
-    bot.reply_to(message, f"✅ Добавлено <code>{pid}</code>\n{name} — {money(price)} · {cat}")
+    bot.reply_to(message, f"✅ <code>{pid}</code> {name} — {money(price)} · {cat}")
 
 
 @bot.message_handler(commands=["del"])
@@ -299,17 +284,17 @@ def cmd_del(message):
         return
     parts = (message.text or "").split()
     if len(parts) < 2:
-        bot.reply_to(message, "<code>/del ID</code>")
+        bot.reply_to(message, "/del ID")
         return
     pid = parts[1].strip()
     data = load_data()
     if pid not in data["products"]:
-        bot.reply_to(message, "Нет такого ID. /list")
+        bot.reply_to(message, "Нет ID")
         return
-    name = data["products"][pid].get("name")
+    name = data["products"][pid]["name"]
     del data["products"][pid]
     save_data(data)
-    bot.reply_to(message, f"🗑 Удалён {name} (<code>{pid}</code>)")
+    bot.reply_to(message, f"🗑 {name}")
 
 
 @bot.message_handler(commands=["setprice"])
@@ -318,21 +303,16 @@ def cmd_setprice(message):
         return
     parts = (message.text or "").split()
     if len(parts) < 3:
-        bot.reply_to(message, "<code>/setprice ID 99</code>")
-        return
-    pid = parts[1].strip()
-    try:
-        price = float(parts[2].replace(",", "."))
-    except ValueError:
-        bot.reply_to(message, "Цена — число.")
+        bot.reply_to(message, "/setprice ID 99")
         return
     data = load_data()
+    pid = parts[1].strip()
     if pid not in data["products"]:
         bot.reply_to(message, "Нет ID")
         return
-    data["products"][pid]["price"] = price
+    data["products"][pid]["price"] = float(parts[2].replace(",", "."))
     save_data(data)
-    bot.reply_to(message, f"Цена {data['products'][pid]['name']}: <b>{money(price)}</b>")
+    bot.reply_to(message, f"Цена обновлена: {money(data['products'][pid]['price'])}")
 
 
 @bot.message_handler(commands=["stock"])
@@ -341,305 +321,308 @@ def cmd_stock(message):
         return
     parts = (message.text or "").split()
     if len(parts) < 3:
-        bot.reply_to(message, "<code>/stock ID 100</code>")
-        return
-    pid = parts[1].strip()
-    try:
-        stock = int(parts[2])
-    except ValueError:
-        bot.reply_to(message, "Число.")
+        bot.reply_to(message, "/stock ID 100")
         return
     data = load_data()
+    pid = parts[1].strip()
     if pid not in data["products"]:
         bot.reply_to(message, "Нет ID")
         return
-    data["products"][pid]["stock"] = stock
+    data["products"][pid]["stock"] = int(parts[2])
     save_data(data)
-    bot.reply_to(message, f"Остаток {data['products'][pid]['name']}: <b>{stock}</b>")
+    bot.reply_to(message, f"Остаток: {data['products'][pid]['stock']}")
 
 
 @bot.message_handler(commands=["orders"])
-def cmd_orders(message):
+def cmd_orders_admin(message):
     if not is_admin(message.from_user.id):
         return
     data = load_data()
-    orders = list(data["orders"].values())
-    orders.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    orders = sorted(data["orders"].values(), key=lambda x: x.get("created_at") or "", reverse=True)
     if not orders:
-        bot.reply_to(message, "Заказов нет.")
+        bot.reply_to(message, "Заказов нет")
         return
-    for o in orders[:20]:
-        kb = None
-        if o.get("status") == "waiting":
-            kb = types.InlineKeyboardMarkup()
-            kb.row(
-                types.InlineKeyboardButton("✅ Оплачен", callback_data=f"payok:{o['id']}"),
-                types.InlineKeyboardButton("❌ Нет", callback_data=f"payno:{o['id']}"),
-            )
+    for o in orders[:15]:
         bot.send_message(
             message.chat.id,
-            f"🧾 <b>#{o['id']}</b> · {o.get('status')}\n"
+            f"#{o['id']} · <b>{o.get('status')}</b>\n"
             f"{o.get('product_name')} — {money(o.get('price'))}\n"
-            f"Клиент: {o.get('user_name')} (<code>{o.get('user_id')}</code>)\n"
-            f"{o.get('created_at')}",
-            reply_markup=kb,
+            f"{o.get('user_name')} · {o.get('created_at')}\n"
+            f"Подтвердить: <code>/payok {o['id']}</code> · отклонить: <code>/payno {o['id']}</code>",
         )
 
 
-# ---------- callbacks ----------
-@bot.callback_query_handler(func=lambda c: True)
-def on_cb(call):
-    try:
-        raw = (call.data or "").strip()
-        uid = call.from_user.id
-        register(call.from_user)
-        data = load_data()
-
-        def ans(text=None, alert=False):
-            try:
-                bot.answer_callback_query(call.id, text=text, show_alert=alert)
-            except Exception:
-                pass
-
-        if raw == "menu:home":
-            ans()
-            bot.send_message(
-                call.message.chat.id,
-                "Главное меню:",
-                reply_markup=main_menu_kb(is_admin(uid)),
-            )
-            return
-
-        if raw == "menu:catalog":
-            ans()
-            bot.send_message(call.message.chat.id, "🛍 <b>Каталог</b> — выберите категорию:", reply_markup=catalog_kb())
-            return
-
-        if raw == "menu:payinfo":
-            ans()
-            bot.send_message(
-                call.message.chat.id,
-                f"💳 <b>Реквизиты</b>\n\n"
-                f"Получатель: <b>{PAYEE_NAME}</b>\n"
-                f"Телефон: <code>{PAYEE_PHONE}</code>\n"
-                f"В комментарии к переводу укажите <b>номер заказа</b>.",
-            )
-            return
-
-        if raw == "menu:orders":
-            ans()
-            mine = [o for o in data["orders"].values() if o.get("user_id") == uid]
-            mine.sort(key=lambda x: x.get("created_at") or "", reverse=True)
-            if not mine:
-                bot.send_message(call.message.chat.id, "У вас пока нет заказов.", reply_markup=main_menu_kb(is_admin(uid)))
-                return
-            for o in mine[:10]:
-                bot.send_message(
-                    call.message.chat.id,
-                    f"🧾 <b>#{o['id']}</b>\n"
-                    f"{o.get('product_name')} — {money(o.get('price'))}\n"
-                    f"Статус: <b>{o.get('status')}</b>\n"
-                    f"{o.get('created_at')}",
-                )
-            return
-
-        if raw == "menu:admin":
-            if not is_admin(uid):
-                ans("Только админ", True)
-                return
-            ans()
-            bot.send_message(
-                call.message.chat.id,
-                "⚙️ <b>Админ</b>\n"
-                "/list — товары\n"
-                "/add Название | цена | категория | описание\n"
-                "/del ID\n"
-                "/setprice ID цена\n"
-                "/stock ID число\n"
-                "/orders — заказы",
-            )
-            return
-
-        if raw.startswith("cat:"):
-            cat = raw[4:]
-            ans()
-            bot.send_message(
-                call.message.chat.id,
-                f"📁 <b>{cat}</b>",
-                reply_markup=products_kb(cat),
-            )
-            return
-
-        if raw.startswith("prod:"):
-            pid = raw[5:]
-            p = data["products"].get(pid)
-            if not p:
-                ans("Нет товара", True)
-                return
-            ans()
-            bot.send_message(
-                call.message.chat.id,
-                f"<b>{p['name']}</b>\n"
-                f"Категория: {p.get('cat')}\n"
-                f"Цена: <b>{money(p['price'])}</b>\n"
-                f"Остаток: {p.get('stock', 0)}\n"
-                f"{p.get('desc') or ''}",
-                reply_markup=product_kb(pid),
-            )
-            return
-
-        if raw.startswith("buy:"):
-            pid = raw[4:]
-            p = data["products"].get(pid)
-            if not p:
-                ans("Нет товара", True)
-                return
-            if int(p.get("stock") or 0) <= 0:
-                ans("Нет в наличии", True)
-                return
-
-            order_id = uuid.uuid4().hex[:8].upper()
-            order = {
-                "id": order_id,
-                "product_id": pid,
-                "product_name": p["name"],
-                "price": p["price"],
-                "user_id": uid,
-                "user_name": f"{call.from_user.first_name or ''} @{call.from_user.username or ''}".strip(),
-                "status": "waiting",
-                "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
-            }
-            data["orders"][order_id] = order
-            # stock reserve soft
-            data["products"][pid]["stock"] = int(p.get("stock") or 0) - 1
-            save_data(data)
-
-            ans("QR отправлен")
-            payload = payment_qr_payload(order_id, p["name"], p["price"])
-            qr_buf = make_qr_png_bytes(payload)
-
-            caption = (
-                f"🧾 <b>Заказ #{order_id}</b>\n\n"
-                f"Товар: <b>{p['name']}</b>\n"
-                f"Цена: <b>{money(p['price'])}</b>\n\n"
-                f"👤 {PAYEE_NAME}\n"
-                f"📱 <code>{PAYEE_PHONE}</code>\n\n"
-                f"1) Отсканируйте QR или переведите на номер\n"
-                f"2) В комментарии: <b>#{order_id}</b>\n"
-                f"3) Нажмите «Я оплатил»"
-            )
-            kb = types.InlineKeyboardMarkup()
-            kb.row(types.InlineKeyboardButton("✅ Я оплатил", callback_data=f"i_paid:{order_id}"))
-            kb.row(types.InlineKeyboardButton("🛍 В каталог", callback_data="menu:catalog"))
-
-            bot.send_photo(call.message.chat.id, qr_buf, caption=caption, reply_markup=kb)
-
-            notify_admins(
-                f"🛒 Новый заказ <b>#{order_id}</b>\n"
-                f"{p['name']} — {money(p['price'])}\n"
-                f"Клиент: {order['user_name']} (<code>{uid}</code>)"
-            )
-            return
-
-        if raw.startswith("i_paid:"):
-            oid = raw.split(":", 1)[1].upper()
-            data = load_data()
-            o = data["orders"].get(oid)
-            if not o:
-                ans("Заказ не найден", True)
-                return
-            if o.get("status") == "paid":
-                ans("Уже подтверждён", True)
-                return
-            o["status"] = "checking"
-            o["claimed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-            save_data(data)
-            ans("На проверке")
-            bot.send_message(call.message.chat.id, f"🔎 Заказ #{oid} на проверке. Ожидайте подтверждения.")
-
-            kb = types.InlineKeyboardMarkup()
-            kb.row(
-                types.InlineKeyboardButton("✅ Оплачен", callback_data=f"payok:{oid}"),
-                types.InlineKeyboardButton("❌ Нет", callback_data=f"payno:{oid}"),
-            )
-            notify_admins(
-                f"🔎 Клиент оплатил заказ <b>#{oid}</b>?\n"
-                f"{o.get('product_name')} — {money(o.get('price'))}\n"
-                f"{o.get('user_name')}",
-                reply_markup=kb,
-            )
-            return
-
-        if raw.startswith("payok:") or raw.startswith("payno:"):
-            if not is_admin(uid):
-                ans("Только админ", True)
-                return
-            oid = raw.split(":", 1)[1].upper()
-            data = load_data()
-            o = data["orders"].get(oid)
-            if not o:
-                ans("Нет заказа", True)
-                return
-            if raw.startswith("payok:"):
-                o["status"] = "paid"
-                o["paid_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
-                save_data(data)
-                ans("Подтверждено")
-                bot.send_message(call.message.chat.id, f"✅ Заказ #{oid} оплачен.")
-                try:
-                    bot.send_message(
-                        int(o["user_id"]),
-                        f"✅ Оплата по заказу <b>#{oid}</b> подтверждена!\n"
-                        f"{o.get('product_name')} — {money(o.get('price'))}\n"
-                        f"Спасибо за покупку.",
-                    )
-                except Exception:
-                    pass
-            else:
-                o["status"] = "waiting"
-                save_data(data)
-                # вернуть stock если нужно — уже списали при buy; не возвращаем при reject
-                ans("Отклонено")
-                bot.send_message(call.message.chat.id, f"❌ Заказ #{oid}: оплата не найдена.")
-                try:
-                    bot.send_message(
-                        int(o["user_id"]),
-                        f"❌ По заказу <b>#{oid}</b> оплата не найдена.\n"
-                        f"Проверьте перевод (сумма и комментарий #{oid}) и нажмите «Я оплатил» снова.",
-                    )
-                except Exception:
-                    pass
-            return
-
-        ans()
-    except Exception as e:
-        print("callback error", e)
+@bot.message_handler(commands=["payok", "payno"])
+def cmd_pay_admin(message):
+    if not is_admin(message.from_user.id):
+        return
+    parts = (message.text or "").split()
+    if len(parts) < 2:
+        bot.reply_to(message, "/payok ID или /payno ID")
+        return
+    oid = parts[1].strip().upper()
+    data = load_data()
+    o = data["orders"].get(oid)
+    if not o:
+        bot.reply_to(message, "Нет заказа")
+        return
+    cmd = parts[0].replace("/", "").split("@")[0]
+    if cmd == "payok":
+        o["status"] = "paid"
+        o["paid_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        save_data(data)
+        bot.reply_to(message, f"✅ #{oid} оплачен")
         try:
-            bot.answer_callback_query(call.id, "Ошибка", show_alert=True)
+            bot.send_message(
+                int(o["user_id"]),
+                f"✅ Оплата по заказу <b>#{oid}</b> подтверждена!\n{o.get('product_name')} — {money(o.get('price'))}",
+                reply_markup=kb_home(False),
+            )
+        except Exception:
+            pass
+    else:
+        o["status"] = "waiting"
+        save_data(data)
+        bot.reply_to(message, f"❌ #{oid} не подтверждён")
+        try:
+            bot.send_message(
+                int(o["user_id"]),
+                f"❌ По заказу <b>#{oid}</b> оплата не найдена. Проверьте перевод и нажмите «Я оплатил».",
+                reply_markup=kb_after_qr(),
+            )
         except Exception:
             pass
 
 
+# ---------- нижнее меню (текст кнопок) ----------
 @bot.message_handler(func=lambda m: True, content_types=["text"])
-def fallback(message):
+def on_text(message):
     register(message.from_user)
-    if is_admin(message.from_user.id):
-        bot.reply_to(message, "Меню: /start · товары: /list · добавить: /add")
-    else:
-        bot.reply_to(message, "Откройте /start → Каталог")
+    uid = message.from_user.id
+    text = (message.text or "").strip()
+    st = get_state(uid)
+    admin = is_admin(uid)
+    data = load_data()
+
+    # --- главные кнопки ---
+    if text in ("🛍 Каталог", "Каталог"):
+        set_state(uid, screen="cats", cat=None, pid=None)
+        bot.send_message(message.chat.id, "Выберите категорию 👇", reply_markup=kb_cats())
+        return
+
+    if text in ("📦 Мои заказы", "Мои заказы"):
+        mine = [o for o in data["orders"].values() if o.get("user_id") == uid]
+        mine.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+        set_state(uid, screen="home")
+        if not mine:
+            bot.send_message(message.chat.id, "Заказов пока нет.", reply_markup=kb_home(admin))
+            return
+        lines = []
+        for o in mine[:10]:
+            lines.append(
+                f"#{o['id']} · {o.get('status')} · {o.get('product_name')} — {money(o.get('price'))}"
+            )
+        bot.send_message(message.chat.id, "<b>Ваши заказы</b>\n" + "\n".join(lines), reply_markup=kb_home(admin))
+        return
+
+    if text in ("💳 Реквизиты", "Реквизиты"):
+        set_state(uid, screen="home")
+        bot.send_message(
+            message.chat.id,
+            f"💳 <b>Реквизиты</b>\n\n"
+            f"Получатель: <b>{PAYEE_NAME}</b>\n"
+            f"Телефон: <code>{PAYEE_PHONE}</code>\n\n"
+            f"В комментарии к переводу укажите номер заказа.",
+            reply_markup=kb_home(admin),
+        )
+        return
+
+    if text in ("ℹ️ Помощь", "Помощь"):
+        set_state(uid, screen="home")
+        bot.send_message(
+            message.chat.id,
+            "1) Каталог → категория → товар\n"
+            "2) «Купить / QR» — придёт QR и цена\n"
+            "3) Перевод на номер, в комментарии #заказ\n"
+            "4) «Я оплатил» — ждёте подтверждения",
+            reply_markup=kb_home(admin),
+        )
+        return
+
+    if text in ("🏠 Меню", "Меню", "◀️ Назад") and st.get("screen") in ("home", "pay", None):
+        set_state(uid, screen="home", cat=None, pid=None)
+        bot.send_message(message.chat.id, "Меню 👇", reply_markup=kb_home(admin))
+        return
+
+    if text == "⚙️ Админ" and admin:
+        bot.send_message(
+            message.chat.id,
+            "⚙️ /list /add /del /setprice /stock /orders /payok /payno",
+            reply_markup=kb_home(True),
+        )
+        return
+
+    # --- назад к категориям ---
+    if text in ("◀️ Назад", "◀️ К категориям"):
+        set_state(uid, screen="cats", cat=None, pid=None)
+        bot.send_message(message.chat.id, "Категории 👇", reply_markup=kb_cats())
+        return
+
+    if text == "🏠 Меню":
+        set_state(uid, screen="home", cat=None, pid=None)
+        bot.send_message(message.chat.id, "Меню 👇", reply_markup=kb_home(admin))
+        return
+
+    if text == "◀️ К товарам":
+        cat = st.get("cat")
+        if not cat:
+            set_state(uid, screen="cats")
+            bot.send_message(message.chat.id, "Категории 👇", reply_markup=kb_cats())
+            return
+        set_state(uid, screen="prods", pid=None)
+        bot.send_message(message.chat.id, f"{cat} 👇", reply_markup=kb_products(cat))
+        return
+
+    # --- выбор категории ---
+    if text.startswith("📁 "):
+        cat = text[2:].strip()
+        if cat not in categories():
+            bot.send_message(message.chat.id, "Нет такой категории", reply_markup=kb_cats())
+            return
+        set_state(uid, screen="prods", cat=cat, pid=None)
+        bot.send_message(message.chat.id, f"<b>{cat}</b> — выберите товар 👇", reply_markup=kb_products(cat))
+        return
+
+    # --- выбор товара по кнопке ---
+    prod = find_product_by_button(text)
+    if prod and st.get("screen") in ("prods", "item", "cats", "home"):
+        set_state(uid, screen="item", pid=prod["id"], cat=prod.get("cat") or st.get("cat"))
+        bot.send_message(
+            message.chat.id,
+            f"<b>{prod['name']}</b>\n"
+            f"Категория: {prod.get('cat')}\n"
+            f"Цена: <b>{money(prod['price'])}</b>\n"
+            f"Остаток: {prod.get('stock', 0)}\n"
+            f"{prod.get('desc') or ''}\n\n"
+            f"Дальше 👇",
+            reply_markup=kb_product_actions(),
+        )
+        return
+
+    # --- купить ---
+    if text == "✅ Купить / QR":
+        pid = st.get("pid")
+        p = data["products"].get(pid) if pid else None
+        if not p:
+            bot.send_message(message.chat.id, "Сначала выберите товар в каталоге.", reply_markup=kb_home(admin))
+            return
+        if int(p.get("stock") or 0) <= 0:
+            bot.send_message(message.chat.id, "Нет в наличии.", reply_markup=kb_home(admin))
+            return
+
+        order_id = uuid.uuid4().hex[:8].upper()
+        order = {
+            "id": order_id,
+            "product_id": pid,
+            "product_name": p["name"],
+            "price": p["price"],
+            "user_id": uid,
+            "user_name": f"{message.from_user.first_name or ''} @{message.from_user.username or ''}".strip(),
+            "status": "waiting",
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M"),
+        }
+        data["orders"][order_id] = order
+        data["products"][pid]["stock"] = int(p.get("stock") or 0) - 1
+        save_data(data)
+        set_state(uid, screen="pay", order_id=order_id)
+
+        payload = (
+            f"Оплата канцтовары\n"
+            f"Получатель: {PAYEE_NAME}\n"
+            f"Телефон: {PAYEE_PHONE}\n"
+            f"Сумма: {p['price']} {CURRENCY}\n"
+            f"Товар: {p['name']}\n"
+            f"Заказ: #{order_id}\n"
+            f"Комментарий: #{order_id}"
+        )
+        qr_buf = make_qr(payload)
+        caption = (
+            f"🧾 <b>Заказ #{order_id}</b>\n"
+            f"Товар: <b>{p['name']}</b>\n"
+            f"Цена: <b>{money(p['price'])}</b>\n\n"
+            f"👤 {PAYEE_NAME}\n"
+            f"📱 <code>{PAYEE_PHONE}</code>\n\n"
+            f"Переведите и в комментарии укажите <b>#{order_id}</b>\n"
+            f"Потом нажмите «Я оплатил» 👇"
+        )
+        bot.send_photo(message.chat.id, qr_buf, caption=caption, reply_markup=kb_after_qr())
+        notify_admins(
+            f"🛒 Заказ #{order_id}\n{p['name']} — {money(p['price'])}\n"
+            f"{order['user_name']} (<code>{uid}</code>)\n"
+            f"/payok {order_id} или /payno {order_id}"
+        )
+        return
+
+    # --- я оплатил ---
+    if text == "✅ Я оплатил":
+        oid = st.get("order_id")
+        data = load_data()
+        o = data["orders"].get(oid) if oid else None
+        if not o:
+            # последний waiting заказ пользователя
+            mine = [
+                x for x in data["orders"].values()
+                if x.get("user_id") == uid and x.get("status") in ("waiting", "checking")
+            ]
+            mine.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+            o = mine[0] if mine else None
+            oid = o["id"] if o else None
+        if not o:
+            bot.send_message(message.chat.id, "Нет активного заказа. Сделайте покупку из каталога.", reply_markup=kb_home(admin))
+            return
+        o["status"] = "checking"
+        o["claimed_at"] = datetime.now().strftime("%Y-%m-%d %H:%M")
+        save_data(data)
+        bot.send_message(
+            message.chat.id,
+            f"🔎 Заказ <b>#{oid}</b> на проверке. Ожидайте подтверждения.",
+            reply_markup=kb_home(admin),
+        )
+        notify_admins(
+            f"🔎 Оплата по #{oid}?\n{o.get('product_name')} — {money(o.get('price'))}\n"
+            f"{o.get('user_name')}\n/payok {oid} · /payno {oid}"
+        )
+        set_state(uid, screen="home")
+        return
+
+    if text == "🛍 В каталог":
+        set_state(uid, screen="cats", cat=None, pid=None)
+        bot.send_message(message.chat.id, "Категории 👇", reply_markup=kb_cats())
+        return
+
+    # fallback
+    bot.send_message(
+        message.chat.id,
+        "Выберите пункт в меню внизу 👇",
+        reply_markup=kb_home(admin),
+    )
 
 
 def main():
-    print("Shop bot starting...")
+    print("Shop bot (bottom keyboard) starting...")
     try:
         bot.remove_webhook()
     except Exception:
         pass
-    notify_admins(
-        "✏️ <b>Бот канцтоваров запущен</b>\n"
-        f"Оплата: {PAYEE_NAME} · {PAYEE_PHONE}\n"
-        "/start — меню · /list — товары · /add — добавить"
-    )
+    for a in ADMIN_IDS:
+        try:
+            bot.send_message(
+                a,
+                "✏️ Бот канцтоваров перезапущен.\nМеню снизу экрана.\n/start",
+                reply_markup=kb_home(True),
+            )
+        except Exception as e:
+            print(e)
     bot.infinity_polling(timeout=60, long_polling_timeout=40, skip_pending=True)
 
 
