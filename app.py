@@ -888,7 +888,7 @@ def telegram_webhook():
         # создаём товар
         product = Product(
             name=st.draft_name or 'Товар',
-            description='Добавлено через Telegram-бот',
+            description='',
             price=price,
             image_url=st.draft_image or 'https://via.placeholder.com/400x300?text=Product',
             category_id=None
