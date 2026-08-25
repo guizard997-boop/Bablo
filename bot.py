@@ -19,7 +19,7 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Распознавание товара через модель Llama 4 Scout (17b-16e-instruct) в Groq API"""
+    """Распознавание товара через актуальную модель Groq Vision API"""
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     data_url = f"data:image/jpeg;base64,{base64_image}"
     
@@ -36,9 +36,9 @@ def analyze_image(image_bytes):
         "2. Выведи ТОЛЬКО JSON-объект. Не добавляй никакого лишнего текста до или после JSON."
     )
     
-    # Запрос к мультимодальной модели meta-llama/llama-4-scout-17b-16e-instruct
+    # Запрос к проверенной мультимодальной модели Groq Vision
     response = groq_client.chat.completions.create(
-        model="meta-llama/llama-4-scout-17b-16e-instruct",
+        model="llama-3.2-90b-vision-preview",
         messages=[
             {
                 "role": "user",
@@ -71,7 +71,7 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Привет! Бот обновлен и работает на базе Llama 4 Scout.\n"
+        "Привет! Бот работает на базе Groq (Llama 3.2 Vision).\n"
         "Отправляй фото товаров (можно альбомом до 10 штук), и я добавлю их на сайт!"
     )
 
@@ -83,7 +83,7 @@ def handle_photo(message):
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        bot.edit_message_text("⚡ Llama 4 Scout анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        bot.edit_message_text("⚡ Groq Vision анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         try:
             data = analyze_image(downloaded_file)
@@ -138,5 +138,5 @@ def handle_photo(message):
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот успешно запущен на базе Llama 4 Scout (17B)...")
+    print("Бот успешно запущен на базе Llama 3.2 Vision...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
