@@ -1,24 +1,27 @@
 import os
 import time
 import json
+import base64
 import requests
 import telebot
-from google import genai
-from google.genai import types
+from groq import Groq
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "ВАШ_GEMINI_API_KEY")
+GROQ_API_KEY = os.getenv("GROQ_API_KEY", "ВАШ_GROQ_API_KEY")
 
 # Прямой адрес API вашего сайта на Railway
 RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
 
 bot = telebot.TeleBot(BOT_TOKEN)
-ai_client = genai.Client(api_key=GEMINI_API_KEY)
+groq_client = Groq(api_key=GROQ_API_KEY)
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Запрос к Gemini 3.6 через SDK google-genai"""
+    """Распознавание товара через Groq Vision API"""
+    base64_image = base64.b64encode(image_bytes).decode('utf-8')
+    data_url = f"data:image/jpeg;base64,{base64_image}"
+    
     prompt = (
         "Проанализируй этот канцелярский товар на фото.\n"
         "Сформируй JSON-ответ строго в таком формате:\n"
@@ -32,18 +35,22 @@ def analyze_image(image_bytes):
         "2. Не добавляй абсолютно никакого текста, кроме чистого JSON."
     )
     
-    image_part = types.Part.from_bytes(
-        data=image_bytes,
-        mime_type='image/jpeg'
+    response = groq_client.chat.completions.create(
+        model="llama-3.2-11b-vision-preview",
+        messages=[
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}}
+                ]
+            }
+        ],
+        temperature=0.1,
+        max_tokens=500
     )
     
-    # Модель gemini-3.6-flash
-    response = ai_client.models.generate_content(
-        model='gemini-3.6-flash',
-        contents=[image_part, prompt]
-    )
-    
-    raw_text = response.text.strip()
+    raw_text = response.choices[0].message.content.strip()
     
     if raw_text.startswith("```json"):
         raw_text = raw_text[7:]
@@ -59,34 +66,31 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Привет! Отправь мне фото (или сразу до 10 фото альбомом), "
-        "и я распознаю каждый товар через Gemini 3.6 и добавлю их на сайт!"
+        "Привет! Бот переведен на Groq API. "
+        "Отправляй фото товаров (можно альбомом до 10 штук), и я добавлю их на сайт!"
     )
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    status_msg = bot.reply_to(message, "⏳ Обрабатываю фото...")
+    status_msg = bot.reply_to(message, "⏳ Обрабатываю фото через Groq...")
     
     try:
-        # 1. Скачивание текущего фото
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        # 2. Анализ через Gemini 3.6
-        bot.edit_message_text("🤖 Анализирую товар (Gemini 3.6)...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        bot.edit_message_text("⚡ Groq анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         try:
             data = analyze_image(downloaded_file)
         except Exception as ai_err:
             err_text = str(ai_err)[:300]
-            bot.edit_message_text(f"❌ Ошибка Gemini:\n{err_text}", chat_id=message.chat.id, message_id=status_msg.message_id)
+            bot.edit_message_text(f"❌ Ошибка Groq API:\n{err_text}", chat_id=message.chat.id, message_id=status_msg.message_id)
             return
 
         title = data.get("title", "Товар без названия")
         price = data.get("price", 0.0)
         description = data.get("description", "")
 
-        # 3. Отправка на сайт
         bot.edit_message_text("🚀 Загружаю на сайт...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         payload = {
@@ -103,7 +107,7 @@ def handle_photo(message):
         if response.status_code in [200, 201]:
             safe_desc = str(description)[:300]
             bot.edit_message_text(
-                f"✅ **Товар добавлен!**\n\n"
+                f"✅ **Товар успешно добавлен!**\n\n"
                 f"📌 **Название:** {title}\n"
                 f"💰 **Цена:** {price} сом\n"
                 f"📝 **Описание:** {safe_desc}", 
@@ -114,7 +118,7 @@ def handle_photo(message):
         else:
             clean_error_text = response.text[:150].replace('<', '&lt;').replace('>', '&gt;')
             bot.edit_message_text(
-                f"❌ Ошибка сервера ({response.status_code}):\n{clean_error_text}", 
+                f"❌ Ошибка сервера сайта ({response.status_code}):\n{clean_error_text}", 
                 chat_id=message.chat.id, 
                 message_id=status_msg.message_id
             )
@@ -122,12 +126,12 @@ def handle_photo(message):
     except Exception as e:
         safe_exception = str(e)[:300].replace('<', '&lt;').replace('>', '&gt;')
         bot.edit_message_text(
-            f"❌ Ошибка обработки:\n{safe_exception}", 
+            f"❌ Ошибка работы бота:\n{safe_exception}", 
             chat_id=message.chat.id, 
             message_id=status_msg.message_id
         )
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот запущен на модели Gemini 3.6...")
+    print("Бот успешно запущен на базе Groq API...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
