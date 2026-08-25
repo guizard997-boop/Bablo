@@ -132,5 +132,13 @@ def handle_photo(message):
 
     except Exception as e:
         safe_exception = str(e)[:300].replace('<', '&lt;').replace('>', '&gt;')
-        bot.edit_message
+        bot.edit_message_text(
+            f"❌ Ошибка работы бота:\n{safe_exception}", 
+            chat_id=message.chat.id, 
+            message_id=status_msg.message_id
+        )
 
+# ==================== ЗАПУСК БОТА ====================
+if __name__ == '__main__':
+    print("Бот запущен и готов к работе...")
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)
