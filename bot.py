@@ -19,7 +19,7 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Распознавание товара через актуальную модель Groq Vision API"""
+    """Распознавание товара через модель Qwen 3.6 27B в Groq API"""
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     data_url = f"data:image/jpeg;base64,{base64_image}"
     
@@ -36,9 +36,9 @@ def analyze_image(image_bytes):
         "2. Выведи ТОЛЬКО JSON-объект. Не добавляй никакого лишнего текста до или после JSON."
     )
     
-    # Запрос к проверенной мультимодальной модели Groq Vision
+    # Используем модель Qwen 3.6 27B из вашего кабинета Groq
     response = groq_client.chat.completions.create(
-        model="llama-3.2-90b-vision-preview",
+        model="qwen-3.6-27b",
         messages=[
             {
                 "role": "user",
@@ -71,7 +71,7 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Привет! Бот работает на базе Groq (Llama 3.2 Vision).\n"
+        "Привет! Бот работает на базе Qwen 3.6 27B.\n"
         "Отправляй фото товаров (можно альбомом до 10 штук), и я добавлю их на сайт!"
     )
 
@@ -83,7 +83,7 @@ def handle_photo(message):
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        bot.edit_message_text("⚡ Groq Vision анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        bot.edit_message_text("⚡ Qwen 3.6 анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         try:
             data = analyze_image(downloaded_file)
@@ -138,5 +138,5 @@ def handle_photo(message):
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот успешно запущен на базе Llama 3.2 Vision...")
+    print("Бот успешно запущен на базе Qwen 3.6 27B...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
