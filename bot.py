@@ -60,7 +60,7 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Привет! Отправь мне фото канцелярского товара (или несколько фото), и я распознаю его через Gemini, "
+        "Привет! Отправь мне фото канцелярского товара, и я распознаю его через Gemini, "
         "сформирую JSON с ценой в сомах и автоматически добавлю на сайт!"
     )
 
@@ -87,7 +87,8 @@ def handle_photo(message):
         try:
             data = analyze_image(downloaded_file)
         except Exception as ai_err:
-            bot.edit_message_text(f"❌ Ошибка при запросе к Gemini: {str(ai_err)}", chat_id=message.chat.id, message_id=status_msg.message_id)
+            err_text = str(ai_err)[:300]
+            bot.edit_message_text(f"❌ Ошибка при запросе к Gemini:\n{err_text}", chat_id=message.chat.id, message_id=status_msg.message_id)
             return
 
         title = data.get("title", "Товар без названия")
@@ -109,30 +110,27 @@ def handle_photo(message):
         response = requests.post(RAILWAY_API_URL, data=payload, files=files, timeout=15)
         
         if response.status_code in [200, 201]:
+            # Безопасная обрезка описания, чтобы отрезать длинные тексты
+            safe_desc = str(description)[:500]
             bot.edit_message_text(
                 f"✅ **Товар успешно добавлен на сайт!**\n\n"
                 f"📌 **Название:** {title}\n"
                 f"💰 **Цена:** {price} сом\n"
-                f"📝 **Описание:** {description}", 
+                f"📝 **Описание:** {safe_desc}", 
                 chat_id=message.chat.id, 
                 message_id=status_msg.message_id,
                 parse_mode="Markdown"
             )
         else:
+            # Жесткая обрезка ответа сервера (до 150 символов)
+            clean_error_text = response.text[:150].replace('<', '&lt;').replace('>', '&gt;')
             bot.edit_message_text(
-                f"❌ Ошибка сервера сайта ({response.status_code}):\n{response.text[:200]}", 
+                f"❌ Ошибка сервера сайта ({response.status_code}):\n{clean_error_text}", 
                 chat_id=message.chat.id, 
                 message_id=status_msg.message_id
             )
 
     except Exception as e:
-        bot.edit_message_text(
-            f"❌ Общая ошибка работы бота: {str(e)}", 
-            chat_id=message.chat.id, 
-            message_id=status_msg.message_id
-        )
+        safe_exception = str(e)[:300].replace('<', '&lt;').replace('>', '&gt;')
+        bot.edit_message
 
-# ==================== ЗАПУСК БОТА ====================
-if __name__ == '__main__':
-    print("Бот запущен и готов к работе...")
-    bot.infinity_polling(timeout=10, long_polling_timeout=5)
