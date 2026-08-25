@@ -11,8 +11,9 @@ from groq import Groq
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "ВАШ_GROQ_API_KEY")
 
-# Прямой адрес API вашего сайта на Railway
-RAILWAY_API_URL = "[https://mircancelyarii-production.up.railway.app/api/products](https://mircancelyarii-production.up.railway.app/api/products)"
+# Прямой адрес API вашего сайта на Railway (чистая строка без скобок!)
+RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
+
 
 bot = telebot.TeleBot(BOT_TOKEN)
 groq_client = Groq(api_key=GROQ_API_KEY)
