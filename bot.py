@@ -7,44 +7,37 @@ import telebot
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
-HF_TOKEN = os.getenv("HF_TOKEN", "ВАШ_HUGGINGFACE_TOKEN")
 
-# Прямой адрес API вашего сайта на Railway
+# API вашего сайта на Railway
 RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Распознавание товара через Hugging Face Serverless API (Moondream2)"""
-    
-    # Принудительная очистка токена от кириллицы, спецсимволов и пробелов
-    clean_hf_token = re.sub(r'[^\x00-\x7F]+', '', HF_TOKEN).strip()
+    """Распознавание товара через бесплатный бесключевой API Pollinations.ai"""
     
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     data_url = f"data:image/jpeg;base64,{base64_image}"
     
-    url = "https://router.huggingface.co/hf-inference/v1/chat/completions"
-    headers = {
-        "Authorization": f"Bearer {clean_hf_token}",
-        "Content-Type": "application/json"
-    }
+    url = "https://text.pollinations.ai/openai"
+    headers = {"Content-Type": "application/json"}
     
     prompt = (
         "Проанализируй этот канцелярский товар на фото.\n"
         "Сформируй JSON-ответ строго в таком формате:\n"
         "{\n"
-        '  "title": "Точное краткое название товара на русском языке",\n'
+        '  "title": "Точное краткое название товара на русском языке (например, Ручка шариковая синяя)",\n'
         '  "price": 150.0,\n'
         '  "description": "Подробное описание товара на русском языке"\n'
         "}\n\n"
         "Правила:\n"
         "1. Поле 'price' должно быть числом (Float/Int) — средняя цена товара в сомах (KGS).\n"
-        "2. Выведи ТОЛЬКО JSON-объект без разметки markdown."
+        "2. Выведи ТОЛЬКО JSON-объект без лишнего текста и без markdown."
     )
 
     payload = {
-        "model": "vikhyatk/moondream2",
+        "model": "openai",
         "messages": [
             {
                 "role": "user",
@@ -54,21 +47,21 @@ def analyze_image(image_bytes):
                 ]
             }
         ],
-        "max_tokens": 500
+        "temperature": 0.2
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=35)
+    response = requests.post(url, headers=headers, json=payload, timeout=45)
     
     if response.status_code != 200:
-        raise ValueError(f"Hugging Face Error ({response.status_code}): {response.text[:200]}")
+        raise ValueError(f"Pollinations Error ({response.status_code}): {response.text[:150]}")
 
     res_data = response.json()
     raw_text = res_data["choices"][0]["message"]["content"].strip()
     
-    # Очистка от фоновых тегов ```json ... ```
+    # Очистка текста от тегов разметки
     raw_text = re.sub(r'```(?:json)?', '', raw_text).strip()
     
-    # Извлечение чистой структуры JSON
+    # Извлечение JSON
     json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
     if json_match:
         clean_json_str = json_match.group(0).strip()
@@ -81,7 +74,7 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Приветствую! Бот работает на базе Hugging Face (Moondream2).\n"
+        "Приветствую! Бот готов к работе.\n"
         "Отправляйте фото канцелярских товаров, и я добавлю их в каталог вашего сайта!"
     )
 
@@ -93,13 +86,13 @@ def handle_photo(message):
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        bot.edit_message_text("⚡ Moondream2 анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        bot.edit_message_text("⚡ ИИ анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         try:
             data = analyze_image(downloaded_file)
         except Exception as ai_err:
             err_text = str(ai_err)[:300]
-            bot.edit_message_text(f"❌ Ошибка HF API:\n{err_text}", chat_id=message.chat.id, message_id=status_msg.message_id)
+            bot.edit_message_text(f"❌ Ошибка ИИ:\n{err_text}", chat_id=message.chat.id, message_id=status_msg.message_id)
             return
 
         title = data.get("title", "Товар без названия")
@@ -148,5 +141,5 @@ def handle_photo(message):
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот успешно запущен на базе Hugging Face...")
+    print("Бот успешно запущен...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
