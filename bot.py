@@ -21,7 +21,7 @@ processed_media_groups = set()
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Запрос к Gemini через актуальный SDK google-genai и модель gemini-2.5-flash"""
+    """Запрос к Gemini через актуальный SDK google-genai и модель gemini-3.6-flash"""
     prompt = (
         "Проанализируй этот канцелярский товар на фото.\n"
         "Сформируй JSON-ответ строго в таком формате:\n"
