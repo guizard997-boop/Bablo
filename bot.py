@@ -15,10 +15,14 @@ RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Инициализация клиента OpenAI для работы через OpenRouter API
+# Инициализация клиента OpenAI для OpenRouter с чисто ASCII-заголовками
 client = OpenAI(
     base_url="https://openrouter.ai/api/v1",
     api_key=OPENROUTER_API_KEY,
+    default_headers={
+        "HTTP-Referer": "https://mircancelyarii-production.up.railway.app",
+        "X-Title": "Mir Kancelyarii Bot"
+    }
 )
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
@@ -83,7 +87,6 @@ def handle_photo(message):
     status_msg = bot.reply_to(message, "⏳ Обрабатываю фото...")
     
     try:
-        # Скачиваем изображение наилучшего качества
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
