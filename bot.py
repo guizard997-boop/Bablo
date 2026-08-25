@@ -1,7 +1,6 @@
 import os
 import json
 import io
-import asyncio
 import requests
 from PIL import Image
 from telegram import Update
@@ -11,9 +10,13 @@ from google.genai import types
 
 # ---------------- CONFIGURATION ----------------
 TELEGRAM_BOT_TOKEN = "8990176397:AAFeYA_iaidYzOmTfM-4x2J40Hj6vi8QKUY"
-GEMINI_API_KEY = "AQ.Ab8RN6IFr90yi9yXaFAWC-1FL0XfsjEgJu-KepjOb0junYRwMA"
-SITE_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") # Берется из Variables в Railway
+SITE_API_URL = os.environ.get("SITE_API_URL", "https://mircancelyarii-production.up.railway.app/api/products")
 # -----------------------------------------------
+
+# Проверка наличия ключа Gemini перед запуском
+if not GEMINI_API_KEY:
+    raise ValueError("❌ Ошибка: Переменная GEMINI_API_KEY не задана в настройках Railway!")
 
 # Инициализируем клиент Gemini
 gemini_client = genai.Client(api_key=GEMINI_API_KEY)
@@ -29,7 +32,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
     status_msg = await update.message.reply_text("⏳ Скачиваю фото и анализирую через бесплатный Gemini ИИ...")
     
     try:
-        # 1. Скачивание фото наилучшего качества из Telegram
+        # 1. Скачивание фото из Telegram
         photo_file = await update.message.photo[-1].get_file()
         photo_bytes = await photo_file.download_as_bytearray()
         
@@ -67,7 +70,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"🚀 Отправляю товар на сайт..."
         )
 
-        # 3. Отправка данных на сайт (POST Multipart Form Data)
+        # 3. Отправка данных на сайт
         payload = {
             'title': title,
             'description': description
@@ -76,7 +79,6 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'image': ('photo.jpg', photo_bytes, 'image/jpeg')
         }
 
-        # Выполняем запрос к сайту
         site_response = requests.post(SITE_API_URL, data=payload, files=files, timeout=30)
 
         if site_response.status_code in [200, 201]:
@@ -97,7 +99,7 @@ def main():
     app.add_handler(CommandHandler("start", start))
     app.add_handler(MessageHandler(filters.PHOTO, handle_photo))
     
-    print("🤖 Бот успешно запущен и готов принимать фото!")
+    print("🤖 Бот успешно запущен!")
     app.run_polling()
 
 if __name__ == "__main__":
