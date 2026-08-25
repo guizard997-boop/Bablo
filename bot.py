@@ -42,7 +42,7 @@ def analyze_image(image_bytes):
     )
     
     response = ai_client.models.generate_content(
-        model='gemini-2.5-flash',
+        model='gemini-3.6-flash',
         contents=[image_part, prompt]
     )
     
