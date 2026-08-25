@@ -21,7 +21,7 @@ processed_media_groups = set()
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Запрос к Gemini 1.5 Flash через актуальный SDK google-genai"""
+    """Запрос к Gemini через актуальный SDK google-genai и модель gemini-2.5-flash"""
     prompt = (
         "Проанализируй этот канцелярский товар на фото.\n"
         "Сформируй JSON-ответ строго в таком формате:\n"
@@ -35,14 +35,14 @@ def analyze_image(image_bytes):
         "2. Не добавляй абсолютно никакого текста, кроме чистого JSON."
     )
     
-    # Правильный способ передачи байтов изображения в новой библиотеке google-genai:
+    # Правильный способ передачи байтов изображения в новой библиотеке google-genai
     image_part = types.Part.from_bytes(
         data=image_bytes,
         mime_type='image/jpeg'
     )
     
     response = ai_client.models.generate_content(
-        model='gemini-1.5-flash',
+        model='gemini-2.5-flash',
         contents=[image_part, prompt]
     )
     
@@ -69,7 +69,7 @@ def start_cmd(message):
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    # Если отправлен альбом, обрабатываем только первое фото
+    # Если отправлен альбом (несколько фото сразу), обрабатываем только 1-е фото из группы
     if message.media_group_id:
         if message.media_group_id in processed_media_groups:
             return
