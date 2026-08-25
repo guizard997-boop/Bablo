@@ -7,8 +7,9 @@ from google import genai
 from google.api_core.exceptions import GoogleAPIError, ServiceUnavailable
 
 # ==================== НАСТРОЙКИ ====================
-BOT_TOKEN = "ВАШ_TELEGRAM_BOT_TOKEN"
-GEMINI_API_KEY = "ВАШ_GEMINI_API_KEY"
+# Токены берутся из переменных окружения Railway (или прямо из строк, если вставить в кавычки)
+BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
+GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "ВАШ_GEMINI_API_KEY")
 
 # Прямой адрес API вашего сайта на Railway
 RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
@@ -16,7 +17,7 @@ RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products
 bot = telebot.TeleBot(BOT_TOKEN)
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
-# ==================== ВСПАМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
+# ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image_with_retry(image_bytes, retries=3, delay=2):
     """Отправка фото в Gemini 1.5 Flash с генерацией строгого JSON и защитой от ошибки 503"""
     
