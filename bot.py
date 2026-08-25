@@ -2,16 +2,15 @@ import os
 import time
 import json
 import re
-import base64
 import requests
 import telebot
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
 
-# Данные Cloudflare
-CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "ВАШ_ACCOUNT_ID")
-CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "ВАШ_API_TOKEN")
+# Данные Cloudflare Workers AI
+CLOUDFLARE_ACCOUNT_ID = os.getenv("CLOUDFLARE_ACCOUNT_ID", "ВАШ_CLOUDFLARE_ACCOUNT_ID")
+CLOUDFLARE_API_TOKEN = os.getenv("CLOUDFLARE_API_TOKEN", "ВАШ_CLOUDFLARE_API_TOKEN")
 
 # Прямой адрес API вашего сайта на Railway
 RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
@@ -22,9 +21,7 @@ bot = telebot.TeleBot(BOT_TOKEN)
 def analyze_image(image_bytes):
     """Распознавание товара через Cloudflare Workers AI (Llama 3.2 11B Vision)"""
     
-    # Конвертируем байты изображения в список целых чисел (формат для Cloudflare API)
     image_array = list(image_bytes)
-    
     url = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct"
     headers = {
         "Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}",
@@ -53,13 +50,21 @@ def analyze_image(image_bytes):
     response = requests.post(url, headers=headers, json=payload, timeout=30)
     res_data = response.json()
 
+    # Автоматическое принятие соглашения лицензии Llama 3.2 (при первом вызове)
+    if not res_data.get("success"):
+        errors_str = str(res_data.get("errors", []))
+        if "Model Agreement" in errors_str or "agree" in errors_str:
+            requests.post(url, headers=headers, json={"prompt": "agree"}, timeout=15)
+            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            res_data = response.json()
+
     if not res_data.get("success"):
         errors = res_data.get("errors", [])
         raise ValueError(f"Cloudflare API Error: {errors}")
 
     raw_text = res_data["result"]["response"].strip()
 
-    # Извлекаем JSON через регулярное выражение
+    # Извлечение чистой структуры JSON из ответа
     json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
     if json_match:
         clean_json_str = json_match.group(0)
@@ -74,7 +79,7 @@ def start_cmd(message):
     bot.send_message(
         message.chat.id, 
         "Привет! Бот переведен на Cloudflare Workers AI.\n"
-        "Отправляй фото товаров (можно альбомом до 10 штук), и я добавлю их на сайт!"
+        "Отправляй фото товаров, и я загружу их на сайт!"
     )
 
 @bot.message_handler(content_types=['photo'])
