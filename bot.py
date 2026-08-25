@@ -18,7 +18,7 @@ ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Запрос к Gemini через SDK google-genai"""
+    """Запрос к Gemini 3.6 через SDK google-genai"""
     prompt = (
         "Проанализируй этот канцелярский товар на фото.\n"
         "Сформируй JSON-ответ строго в таком формате:\n"
@@ -37,6 +37,7 @@ def analyze_image(image_bytes):
         mime_type='image/jpeg'
     )
     
+    # Модель gemini-3.6-flash
     response = ai_client.models.generate_content(
         model='gemini-3.6-flash',
         contents=[image_part, prompt]
@@ -59,7 +60,7 @@ def start_cmd(message):
     bot.send_message(
         message.chat.id, 
         "Привет! Отправь мне фото (или сразу до 10 фото альбомом), "
-        "и я распознаю каждый товар через Gemini и добавлю их на сайт!"
+        "и я распознаю каждый товар через Gemini 3.6 и добавлю их на сайт!"
     )
 
 @bot.message_handler(content_types=['photo'])
@@ -67,12 +68,12 @@ def handle_photo(message):
     status_msg = bot.reply_to(message, "⏳ Обрабатываю фото...")
     
     try:
-        # 1. Скачивание текущего фото из пачки
+        # 1. Скачивание текущего фото
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        # 2. Анализ через Gemini
-        bot.edit_message_text("🤖 Анализирую товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        # 2. Анализ через Gemini 3.6
+        bot.edit_message_text("🤖 Анализирую товар (Gemini 3.6)...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         try:
             data = analyze_image(downloaded_file)
@@ -128,5 +129,5 @@ def handle_photo(message):
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот запущен и готов к пакетной загрузке...")
+    print("Бот запущен на модели Gemini 3.6...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
