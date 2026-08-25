@@ -11,7 +11,7 @@ from google.genai import types
 # ---------------- CONFIGURATION ----------------
 TELEGRAM_BOT_TOKEN = "8800283479:AAF2wbYPGH2aabxiOAuJ62qQqbNb1NyrX3k"
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") # Берется из Variables в Railway
-SITE_API_URL = os.environ.get("SITE_API_URL", "https://mircancelyarii-production.up.railway.app/api/products")
+SITE_API_URL = os.environ.get("SITE_API_URL", "https://mircancelyarii-production.up.railway.app/telegram-webhook")
 # -----------------------------------------------
 
 if not GEMINI_API_KEY:
