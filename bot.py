@@ -4,7 +4,7 @@ import json
 import requests
 import telebot
 from google import genai
-from google.api_core.exceptions import GoogleAPIError, ServiceUnavailable
+from google.genai import types
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
@@ -21,7 +21,7 @@ processed_media_groups = set()
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Запрос к Gemini 1.5 Flash с очисткой текста до JSON"""
+    """Запрос к Gemini 1.5 Flash через актуальный SDK google-genai"""
     prompt = (
         "Проанализируй этот канцелярский товар на фото.\n"
         "Сформируй JSON-ответ строго в таком формате:\n"
@@ -35,12 +35,15 @@ def analyze_image(image_bytes):
         "2. Не добавляй абсолютно никакого текста, кроме чистого JSON."
     )
     
+    # Правильный способ передачи байтов изображения в новой библиотеке google-genai:
+    image_part = types.Part.from_bytes(
+        data=image_bytes,
+        mime_type='image/jpeg'
+    )
+    
     response = ai_client.models.generate_content(
         model='gemini-1.5-flash',
-        contents=[
-            {'mime_type': 'image/jpeg', 'data': image_bytes},
-            prompt
-        ]
+        contents=[image_part, prompt]
     )
     
     raw_text = response.text.strip()
@@ -66,7 +69,7 @@ def start_cmd(message):
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    # Если отправлен альбом (несколько фото сразу), обрабатываем только 1-е фото из группы
+    # Если отправлен альбом, обрабатываем только первое фото
     if message.media_group_id:
         if message.media_group_id in processed_media_groups:
             return
@@ -110,7 +113,6 @@ def handle_photo(message):
         response = requests.post(RAILWAY_API_URL, data=payload, files=files, timeout=15)
         
         if response.status_code in [200, 201]:
-            # Безопасная обрезка описания, чтобы отрезать длинные тексты
             safe_desc = str(description)[:500]
             bot.edit_message_text(
                 f"✅ **Товар успешно добавлен на сайт!**\n\n"
@@ -122,7 +124,6 @@ def handle_photo(message):
                 parse_mode="Markdown"
             )
         else:
-            # Жесткая обрезка ответа сервера (до 150 символов)
             clean_error_text = response.text[:150].replace('<', '&lt;').replace('>', '&gt;')
             bot.edit_message_text(
                 f"❌ Ошибка сервера сайта ({response.status_code}):\n{clean_error_text}", 
