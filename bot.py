@@ -1,6 +1,7 @@
 import os
 import time
 import json
+import re
 import base64
 import requests
 import telebot
@@ -11,7 +12,7 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "ВАШ_GROQ_API_KEY")
 
 # Прямой адрес API вашего сайта на Railway
-RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
+RAILWAY_API_URL = "[https://mircancelyarii-production.up.railway.app/api/products](https://mircancelyarii-production.up.railway.app/api/products)"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 groq_client = Groq(api_key=GROQ_API_KEY)
@@ -32,10 +33,9 @@ def analyze_image(image_bytes):
         "}\n\n"
         "Правила:\n"
         "1. Поле 'price' должно быть числом (Float/Int) — средняя примерная цена товара в сомах (KGS).\n"
-        "2. Не добавляй абсолютно никакого текста, кроме чистого JSON."
+        "2. Выведи ТОЛЬКО JSON-объект. Не добавляй никакого лишнего текста до или после JSON."
     )
     
-    # Запрос к мультимодальной модели qwen/qwen3.6-27b
     response = groq_client.chat.completions.create(
         model="qwen/qwen3.6-27b",
         messages=[
@@ -48,27 +48,29 @@ def analyze_image(image_bytes):
             }
         ],
         temperature=0.1,
-        max_tokens=500
+        max_tokens=600
     )
     
     raw_text = response.choices[0].message.content.strip()
     
-    # Очистка Markdown разметки ```json ... ```
-    if raw_text.startswith("```json"):
-        raw_text = raw_text[7:]
-    if raw_text.startswith("```"):
-        raw_text = raw_text[3:]
-    if raw_text.endswith("```"):
-        raw_text = raw_text[:-3]
-        
-    return json.loads(raw_text.strip())
+    if not raw_text:
+        raise ValueError("Модель вернула пустой ответ.")
+
+    # Используем регулярные выражения, чтобы вытащить строго JSON {...}
+    json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
+    if json_match:
+        clean_json_str = json_match.group(0)
+    else:
+        clean_json_str = raw_text
+
+    return json.loads(clean_json_str)
 
 # ==================== ОБРАБОТЧИКИ ТЕЛЕГРАМ ====================
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Привет! Бот обновлен и работает на модели Qwen 3.6 27B.\n"
+        "Привет! Бот работает на базе Qwen 3.6 27B.\n"
         "Отправляй фото товаров (можно альбомом до 10 штук), и я добавлю их на сайт!"
     )
 
@@ -80,7 +82,7 @@ def handle_photo(message):
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        bot.edit_message_text("⚡ Qwen 3.6 анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        bot.edit_message_text("⚡ ИИ анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         try:
             data = analyze_image(downloaded_file)
@@ -135,5 +137,5 @@ def handle_photo(message):
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот успешно запущен на базе Qwen 3.6 27B...")
+    print("Бот успешно запущен на базе Qwen 3.6 27B с надежным парсингом JSON...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
