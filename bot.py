@@ -62,7 +62,18 @@ def analyze_image(image_bytes):
         errors = res_data.get("errors", [])
         raise ValueError(f"Cloudflare API Error: {errors}")
 
-    raw_text = res_data["result"]["response"].strip()
+    result = res_data.get("result", {})
+    raw_response = result.get("response", "")
+
+    # Корректное извлечение текста в зависимости от типа структуры ответа
+    if isinstance(raw_response, dict):
+        raw_text = str(raw_response.get("description") or raw_response.get("content") or json.dumps(raw_response))
+    elif isinstance(raw_response, list):
+        raw_text = " ".join([str(item) for item in raw_response])
+    else:
+        raw_text = str(raw_response)
+
+    raw_text = raw_text.strip()
 
     # Извлечение чистой структуры JSON из ответа
     json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
