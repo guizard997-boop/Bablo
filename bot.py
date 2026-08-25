@@ -11,16 +11,15 @@ from groq import Groq
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
 GROQ_API_KEY = os.getenv("GROQ_API_KEY", "ВАШ_GROQ_API_KEY")
 
-# Прямой адрес API вашего сайта на Railway (чистая строка без скобок!)
+# Прямой адрес API вашего сайта на Railway
 RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
-
 
 bot = telebot.TeleBot(BOT_TOKEN)
 groq_client = Groq(api_key=GROQ_API_KEY)
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Распознавание товара через модель Qwen 3.6 27B в Groq API"""
+    """Распознавание товара через модель Llama 4 Scout (17b-16e-instruct) в Groq API"""
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     data_url = f"data:image/jpeg;base64,{base64_image}"
     
@@ -37,8 +36,9 @@ def analyze_image(image_bytes):
         "2. Выведи ТОЛЬКО JSON-объект. Не добавляй никакого лишнего текста до или после JSON."
     )
     
+    # Запрос к мультимодальной модели meta-llama/llama-4-scout-17b-16e-instruct
     response = groq_client.chat.completions.create(
-        model="qwen/qwen3.6-27b",
+        model="meta-llama/llama-4-scout-17b-16e-instruct",
         messages=[
             {
                 "role": "user",
@@ -57,7 +57,7 @@ def analyze_image(image_bytes):
     if not raw_text:
         raise ValueError("Модель вернула пустой ответ.")
 
-    # Используем регулярные выражения, чтобы вытащить строго JSON {...}
+    # Вытаскиваем строго JSON {...} через регулярные выражения
     json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
     if json_match:
         clean_json_str = json_match.group(0)
@@ -71,7 +71,7 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Привет! Бот работает на базе Qwen 3.6 27B.\n"
+        "Привет! Бот обновлен и работает на базе Llama 4 Scout.\n"
         "Отправляй фото товаров (можно альбомом до 10 штук), и я добавлю их на сайт!"
     )
 
@@ -83,7 +83,7 @@ def handle_photo(message):
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        bot.edit_message_text("⚡ ИИ анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        bot.edit_message_text("⚡ Llama 4 Scout анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         try:
             data = analyze_image(downloaded_file)
@@ -138,5 +138,5 @@ def handle_photo(message):
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот успешно запущен на базе Qwen 3.6 27B с надежным парсингом JSON...")
+    print("Бот успешно запущен на базе Llama 4 Scout (17B)...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
