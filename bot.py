@@ -7,7 +7,6 @@ from google import genai
 from google.api_core.exceptions import GoogleAPIError, ServiceUnavailable
 
 # ==================== НАСТРОЙКИ ====================
-# Токены берутся из переменных окружения Railway (или прямо из строк, если вставить в кавычки)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "ВАШ_GEMINI_API_KEY")
 
@@ -17,10 +16,12 @@ RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products
 bot = telebot.TeleBot(BOT_TOKEN)
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
+# Кэш для предотвращения повторной обработки альбомов фото
+processed_media_groups = set()
+
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
-def analyze_image_with_retry(image_bytes, retries=3, delay=2):
-    """Отправка фото в Gemini 1.5 Flash с генерацией строгого JSON и защитой от ошибки 503"""
-    
+def analyze_image(image_bytes):
+    """Запрос к Gemini 1.5 Flash с очисткой текста до JSON"""
     prompt = (
         "Проанализируй этот канцелярский товар на фото.\n"
         "Сформируй JSON-ответ строго в таком формате:\n"
@@ -30,72 +31,70 @@ def analyze_image_with_retry(image_bytes, retries=3, delay=2):
         '  "description": "Привлекательное описание товара на русском языке"\n'
         "}\n\n"
         "Правила:\n"
-        "1. Поле 'price' должно быть числом (Float/Int). Это примерная средняя розничная цена товара в сомах (KGS).\n"
-        "2. Не добавляй никаких лишних символов, кроме валидного JSON."
+        "1. Поле 'price' должно быть числом (Float/Int) — средняя примерная цена товара в сомах (KGS).\n"
+        "2. Не добавляй абсолютно никакого текста, кроме чистого JSON."
     )
     
-    for attempt in range(retries):
-        try:
-            response = ai_client.models.generate_content(
-                model='gemini-1.5-flash',
-                contents=[
-                    {'mime_type': 'image/jpeg', 'data': image_bytes},
-                    prompt
-                ]
-            )
-            
-            # Очистка текста от возможных блоков markdown ```json ... ```
-            raw_text = response.text.strip()
-            if raw_text.startswith("```json"):
-                raw_text = raw_text[7:]
-            if raw_text.startswith("```"):
-                raw_text = raw_text[3:]
-            if raw_text.endswith("```"):
-                raw_text = raw_text[:-3]
-                
-            return json.loads(raw_text.strip())
-
-        except (ServiceUnavailable, GoogleAPIError) as e:
-            if attempt == retries - 1:
-                raise e
-            print(f"Сервер Gemini перегружен (503). Повтор через {delay} сек...")
-            time.sleep(delay)
-            delay *= 2
-        except json.JSONDecodeError:
-            # Резервный вариант, если Gemini вернула не валидный JSON
-            return {
-                "title": "Канцелярский товар",
-                "price": 0.0,
-                "description": response.text.strip()
-            }
+    response = ai_client.models.generate_content(
+        model='gemini-1.5-flash',
+        contents=[
+            {'mime_type': 'image/jpeg', 'data': image_bytes},
+            prompt
+        ]
+    )
+    
+    raw_text = response.text.strip()
+    
+    # Очистка Markdown разметки ```json ... ```
+    if raw_text.startswith("```json"):
+        raw_text = raw_text[7:]
+    if raw_text.startswith("```"):
+        raw_text = raw_text[3:]
+    if raw_text.endswith("```"):
+        raw_text = raw_text[:-3]
+        
+    return json.loads(raw_text.strip())
 
 # ==================== ОБРАБОТЧИКИ ТЕЛЕГРАМ ====================
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Привет! Отправь мне фото канцелярского товара, и я автоматически распознаю его через Gemini 1.5 Flash, "
-        "сформирую JSON с ценой в сомах и добавлю на сайт!"
+        "Привет! Отправь мне фото канцелярского товара (или несколько фото), и я распознаю его через Gemini, "
+        "сформирую JSON с ценой в сомах и автоматически добавлю на сайт!"
     )
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    status_msg = bot.reply_to(message, "⏳ Скачиваю фото и отправляю в Gemini 1.5 Flash...")
+    # Если отправлен альбом (несколько фото сразу), обрабатываем только 1-е фото из группы
+    if message.media_group_id:
+        if message.media_group_id in processed_media_groups:
+            return
+        processed_media_groups.add(message.media_group_id)
+        if len(processed_media_groups) > 100:
+            processed_media_groups.clear()
+
+    status_msg = bot.reply_to(message, "⏳ Скачиваю фото...")
     
     try:
-        # 1. Скачиваем фото из Telegram
+        # 1. Скачивание файла
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        # 2. Распознаем через Gemini 1.5 Flash (получаем JSON)
+        # 2. Генерация описания и цены через Gemini
         bot.edit_message_text("🤖 Gemini генерирует JSON-данные и цену...", chat_id=message.chat.id, message_id=status_msg.message_id)
-        data = analyze_image_with_retry(downloaded_file)
         
+        try:
+            data = analyze_image(downloaded_file)
+        except Exception as ai_err:
+            bot.edit_message_text(f"❌ Ошибка при запросе к Gemini: {str(ai_err)}", chat_id=message.chat.id, message_id=status_msg.message_id)
+            return
+
         title = data.get("title", "Товар без названия")
         price = data.get("price", 0.0)
         description = data.get("description", "")
 
-        # 3. Отправляем готовые данные на Railway
+        # 3. Отправка POST-запроса на Railway API
         bot.edit_message_text("🚀 Отправляю данные на сайт...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         payload = {
@@ -128,12 +127,12 @@ def handle_photo(message):
 
     except Exception as e:
         bot.edit_message_text(
-            f"❌ Произошла ошибка: {str(e)}", 
+            f"❌ Общая ошибка работы бота: {str(e)}", 
             chat_id=message.chat.id, 
             message_id=status_msg.message_id
         )
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот с JSON-обработкой и ценами в KGS запущен...")
-    bot.infinity_polling()
+    print("Бот запущен и готов к работе...")
+    bot.infinity_polling(timeout=10, long_polling_timeout=5)
