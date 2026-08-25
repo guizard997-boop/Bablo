@@ -36,9 +36,9 @@ def analyze_image(image_bytes):
         "2. Выведи ТОЛЬКО JSON-объект. Не добавляй никакого лишнего текста до или после JSON."
     )
     
-    # Используем модель Qwen 3.6 27B из вашего кабинета Groq
+    # Запрос к модели qwen/qwen3.6-27b
     response = groq_client.chat.completions.create(
-        model="qwen-3.6-27b",
+        model="qwen/qwen3.6-27b",
         messages=[
             {
                 "role": "user",
@@ -138,5 +138,5 @@ def handle_photo(message):
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот успешно запущен на базе Qwen 3.6 27B...")
+    print("Бот успешно запущен на базе qwen/qwen3.6-27b...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
