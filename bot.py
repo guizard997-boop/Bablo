@@ -9,7 +9,7 @@ import telebot
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
 HF_TOKEN = os.getenv("HF_TOKEN", "ВАШ_HUGGINGFACE_TOKEN")
 
-# API вашего сайта на Railway
+# Прямой адрес API вашего сайта на Railway
 RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
 
 bot = telebot.TeleBot(BOT_TOKEN)
@@ -18,12 +18,15 @@ bot = telebot.TeleBot(BOT_TOKEN)
 def analyze_image(image_bytes):
     """Распознавание товара через Hugging Face Serverless API (Moondream2)"""
     
+    # Принудительная очистка токена от кириллицы, спецсимволов и пробелов
+    clean_hf_token = re.sub(r'[^\x00-\x7F]+', '', HF_TOKEN).strip()
+    
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     data_url = f"data:image/jpeg;base64,{base64_image}"
     
     url = "https://router.huggingface.co/hf-inference/v1/chat/completions"
     headers = {
-        "Authorization": f"Bearer {HF_TOKEN}",
+        "Authorization": f"Bearer {clean_hf_token}",
         "Content-Type": "application/json"
     }
     
@@ -62,8 +65,10 @@ def analyze_image(image_bytes):
     res_data = response.json()
     raw_text = res_data["choices"][0]["message"]["content"].strip()
     
+    # Очистка от фоновых тегов ```json ... ```
     raw_text = re.sub(r'```(?:json)?', '', raw_text).strip()
     
+    # Извлечение чистой структуры JSON
     json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
     if json_match:
         clean_json_str = json_match.group(0).strip()
@@ -76,8 +81,8 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Приветствую! Бот переведен на Hugging Face (Moondream2).\n"
-        "Отправляйте фото канцелярских товаров, и я добавлю их на сайт!"
+        "Приветствую! Бот работает на базе Hugging Face (Moondream2).\n"
+        "Отправляйте фото канцелярских товаров, и я добавлю их в каталог вашего сайта!"
     )
 
 @bot.message_handler(content_types=['photo'])
