@@ -1,9 +1,7 @@
-
 import os
 import time
 import json
 import re
-import base64
 import requests
 import telebot
 
@@ -23,9 +21,8 @@ bot = telebot.TeleBot(BOT_TOKEN)
 def analyze_image(image_bytes):
     """Распознавание товара через Cloudflare Workers AI (Llama 3.2 11B Vision)"""
     
-    # Кодируем изображение в base64 data-URL для гарантированной передачи
-    base64_image = base64.b64encode(image_bytes).decode('utf-8')
-    data_url = f"data:image/jpeg;base64,{base64_image}"
+    # Преобразуем байты изображения в список чисел (требование Cloudflare REST API для файлов)
+    image_array = list(image_bytes)
     
     url = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct"
     headers = {
@@ -43,27 +40,20 @@ def analyze_image(image_bytes):
         "}\n\n"
         "Правила:\n"
         "1. Поле 'price' должно быть числом (Float/Int) — средняя примерная цена товара в сомах (KGS).\n"
-        "2. Выведи ТОЛЬКО JSON-объект. Не добавляй никаких пояснений, тегов или текстов вокруг."
+        "2. Выведи ТОЛЬКО JSON-объект. Не добавляй никакого текста до или после JSON."
     )
 
-    # Запрос с передачей изображений через роли
+    # Стандартная структура Cloudflare Workers AI для мультимодальных моделей
     payload = {
-        "messages": [
-            {
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {"url": data_url}}
-                ]
-            }
-        ],
+        "prompt": prompt,
+        "image": image_array,
         "max_tokens": 500
     }
 
     response = requests.post(url, headers=headers, json=payload, timeout=35)
     res_data = response.json()
 
-    # Автоматическое принятие лицензии при первом вызове
+    # Автоматическое подтверждение соглашения при первом запуске
     if not res_data.get("success"):
         errors_str = str(res_data.get("errors", []))
         if "Model Agreement" in errors_str or "agree" in errors_str:
@@ -77,25 +67,20 @@ def analyze_image(image_bytes):
 
     result = res_data.get("result", {})
     
-    # Извлечение текста ответа из разного типа структур Cloudflare
-    if "response" in result:
-        raw_response = result["response"]
-    elif "choices" in result and len(result["choices"]) > 0:
-        raw_response = result["choices"][0].get("message", {}).get("content", "")
-    else:
-        raw_response = str(result)
-
+    # Извлечение текста ответа
+    raw_response = result.get("response", "")
+    
     if isinstance(raw_response, dict):
-        raw_text = str(raw_response.get("content") or raw_response.get("description") or "")
+        raw_text = str(raw_response.get("description") or raw_response.get("content") or "")
     else:
         raw_text = str(raw_response)
 
     raw_text = raw_text.strip()
 
-    # Удаляем фоновую разметку ```json ... ```
+    # Очистка от Markdown разметки ```json ... ```
     raw_text = re.sub(r'```(?:json)?', '', raw_text).strip()
 
-    # Извлекаем фигурные скобки JSON
+    # Извлекаем JSON-строку
     json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
     if json_match:
         clean_json_str = json_match.group(0).strip()
@@ -103,7 +88,7 @@ def analyze_image(image_bytes):
         clean_json_str = raw_text
 
     if not clean_json_str:
-        raise ValueError("Модель вернула пустой ответ. Попробуйте еще раз.")
+        raise ValueError("Cloudflare вернул пустой ответ. Перепроверьте API Token или отправьте фото снова.")
 
     return json.loads(clean_json_str)
 
