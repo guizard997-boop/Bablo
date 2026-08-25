@@ -4,50 +4,45 @@ import re
 import base64
 import requests
 import telebot
-from openai import OpenAI
 
 # ==================== НАСТРОЙКИ ====================
 BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "ВАШ_OPENROUTER_API_KEY")
+HF_TOKEN = os.getenv("HF_TOKEN", "ВАШ_HUGGINGFACE_TOKEN")
 
-# Прямой адрес API вашего сайта на Railway
+# API вашего сайта на Railway
 RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# Инициализация клиента OpenAI для OpenRouter с чисто ASCII-заголовками
-client = OpenAI(
-    base_url="https://openrouter.ai/api/v1",
-    api_key=OPENROUTER_API_KEY,
-    default_headers={
-        "HTTP-Referer": "https://mircancelyarii-production.up.railway.app",
-        "X-Title": "Mir Kancelyarii Bot"
-    }
-)
-
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Распознавание товара через бесплатный Qwen 2 VL на OpenRouter"""
+    """Распознавание товара через Hugging Face Serverless API (Moondream2)"""
     
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     data_url = f"data:image/jpeg;base64,{base64_image}"
+    
+    url = "https://router.huggingface.co/hf-inference/v1/chat/completions"
+    headers = {
+        "Authorization": f"Bearer {HF_TOKEN}",
+        "Content-Type": "application/json"
+    }
     
     prompt = (
         "Проанализируй этот канцелярский товар на фото.\n"
         "Сформируй JSON-ответ строго в таком формате:\n"
         "{\n"
-        '  "title": "Точное краткое название товара на русском языке (например, Ручка шариковая синяя)",\n'
+        '  "title": "Точное краткое название товара на русском языке",\n'
         '  "price": 150.0,\n'
-        '  "description": "Подробное и привлекательное описание товара на русском языке"\n'
+        '  "description": "Подробное описание товара на русском языке"\n'
         "}\n\n"
         "Правила:\n"
-        "1. Поле 'price' должно быть числом (Float/Int) — средняя примерная цена товара в сомах (KGS).\n"
-        "2. Выведи ТОЛЬКО JSON-объект. Не добавляй никакого лишнего текста до или после JSON."
+        "1. Поле 'price' должно быть числом (Float/Int) — средняя цена товара в сомах (KGS).\n"
+        "2. Выведи ТОЛЬКО JSON-объект без разметки markdown."
     )
 
-    response = client.chat.completions.create(
-        model="qwen/qwen-2-vl-72b-instruct:free",
-        messages=[
+    payload = {
+        "model": "vikhyatk/moondream2",
+        "messages": [
             {
                 "role": "user",
                 "content": [
@@ -56,30 +51,33 @@ def analyze_image(image_bytes):
                 ]
             }
         ],
-        temperature=0.2,
-        max_tokens=600
-    )
+        "max_tokens": 500
+    }
 
-    raw_text = response.choices[0].message.content.strip()
+    response = requests.post(url, headers=headers, json=payload, timeout=35)
     
-    # Очистка текста от возможных фоновых тегов ```json ... ```
+    if response.status_code != 200:
+        raise ValueError(f"Hugging Face Error ({response.status_code}): {response.text[:200]}")
+
+    res_data = response.json()
+    raw_text = res_data["choices"][0]["message"]["content"].strip()
+    
     raw_text = re.sub(r'```(?:json)?', '', raw_text).strip()
     
-    # Извлечение чистой структуры JSON
     json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
     if json_match:
         clean_json_str = json_match.group(0).strip()
         return json.loads(clean_json_str)
         
-    raise ValueError(f"Не удалось извлечь JSON из ответа нейросети: {raw_text[:100]}")
+    raise ValueError(f"Не удалось извлечь JSON: {raw_text[:100]}")
 
 # ==================== ОБРАБОТЧИКИ ТЕЛЕГРАМ ====================
 @bot.message_handler(commands=['start'])
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Приветствую! Бот работает на базе OpenRouter (Qwen 2 VL).\n"
-        "Отправляйте фото канцелярских товаров, и я добавлю их в каталог вашего сайта!"
+        "Приветствую! Бот переведен на Hugging Face (Moondream2).\n"
+        "Отправляйте фото канцелярских товаров, и я добавлю их на сайт!"
     )
 
 @bot.message_handler(content_types=['photo'])
@@ -90,13 +88,13 @@ def handle_photo(message):
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        bot.edit_message_text("⚡ Qwen 2 VL анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        bot.edit_message_text("⚡ Moondream2 анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         try:
             data = analyze_image(downloaded_file)
         except Exception as ai_err:
             err_text = str(ai_err)[:300]
-            bot.edit_message_text(f"❌ Ошибка OpenRouter API:\n{err_text}", chat_id=message.chat.id, message_id=status_msg.message_id)
+            bot.edit_message_text(f"❌ Ошибка HF API:\n{err_text}", chat_id=message.chat.id, message_id=status_msg.message_id)
             return
 
         title = data.get("title", "Товар без названия")
@@ -145,5 +143,5 @@ def handle_photo(message):
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот успешно запущен на базе OpenRouter...")
+    print("Бот успешно запущен на базе Hugging Face...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
