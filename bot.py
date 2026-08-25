@@ -11,7 +11,7 @@ from google.genai import types
 
 # ---------------- CONFIGURATION ----------------
 TELEGRAM_BOT_TOKEN = "8990176397:AAFeYA_iaidYzOmTfM-4x2J40Hj6vi8QKUY"
-GEMINI_API_KEY = "AQ.Ab8RN6LZz6xl54UxOsZ1TZwWU_OMD3ErfZW1pi7xGR00exHzww"
+GEMINI_API_KEY = "AQ.Ab8RN6IFr90yi9yXaFAWC-1FL0XfsjEgJu-KepjOb0junYRwMA"
 SITE_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
 # -----------------------------------------------
 
