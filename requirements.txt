@@ -1,4 +1,3 @@
-python-telegram-bot>=20.7
+pyTelegramBotAPI
 google-genai
-requests>=2.31.0
-pillow>=10.2.0
+requests
