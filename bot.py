@@ -18,7 +18,7 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Распознавание товара через актуальную модель Groq Vision API"""
+    """Распознавание товара через модель Qwen 3.6 27B в Groq API"""
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     data_url = f"data:image/jpeg;base64,{base64_image}"
     
@@ -35,9 +35,9 @@ def analyze_image(image_bytes):
         "2. Не добавляй абсолютно никакого текста, кроме чистого JSON."
     )
     
-    # Используем актуальную поддерживаемую модель llama-3.2-90b-vision-preview
+    # Запрос к мультимодальной модели qwen/qwen3.6-27b
     response = groq_client.chat.completions.create(
-        model="llama-3.2-90b-vision-preview",
+        model="qwen/qwen3.6-27b",
         messages=[
             {
                 "role": "user",
@@ -53,6 +53,7 @@ def analyze_image(image_bytes):
     
     raw_text = response.choices[0].message.content.strip()
     
+    # Очистка Markdown разметки ```json ... ```
     if raw_text.startswith("```json"):
         raw_text = raw_text[7:]
     if raw_text.startswith("```"):
@@ -67,19 +68,19 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Привет! Бот работает на базе Groq API (Llama 3.2 Vision).\n"
+        "Привет! Бот обновлен и работает на модели Qwen 3.6 27B.\n"
         "Отправляй фото товаров (можно альбомом до 10 штук), и я добавлю их на сайт!"
     )
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    status_msg = bot.reply_to(message, "⏳ Обрабатываю фото через Groq...")
+    status_msg = bot.reply_to(message, "⏳ Обрабатываю фото...")
     
     try:
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        bot.edit_message_text("⚡ Groq анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        bot.edit_message_text("⚡ Qwen 3.6 анализирует товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         try:
             data = analyze_image(downloaded_file)
@@ -134,5 +135,5 @@ def handle_photo(message):
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот успешно запущен на базе актуальной модели Groq Vision...")
+    print("Бот успешно запущен на базе Qwen 3.6 27B...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
