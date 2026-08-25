@@ -14,7 +14,6 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY") # Берется из Variable
 SITE_API_URL = os.environ.get("SITE_API_URL", "https://mircancelyarii-production.up.railway.app/api/products")
 # -----------------------------------------------
 
-# Проверка наличия ключа Gemini перед запуском
 if not GEMINI_API_KEY:
     raise ValueError("❌ Ошибка: Переменная GEMINI_API_KEY не задана в настройках Railway!")
 
@@ -39,7 +38,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         # Преобразуем байты в объект Pillow Image
         image = Image.open(io.BytesIO(photo_bytes))
 
-        # 2. Запрос к Gemini 2.5 Flash
+        # 2. Запрос к стабильной модель Gemini 2.0 Flash
         await status_msg.edit_text("🧠 Генерирую название и описание товара...")
         
         prompt = (
@@ -51,7 +50,7 @@ async def handle_photo(update: Update, context: ContextTypes.DEFAULT_TYPE):
         )
 
         response = gemini_client.models.generate_content(
-            model='gemini-2.5-flash',
+            model='gemini-2.0-flash',
             contents=[image, prompt],
             config=types.GenerateContentConfig(
                 response_mime_type="application/json"
