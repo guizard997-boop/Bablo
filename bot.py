@@ -1,7 +1,9 @@
+
 import os
 import time
 import json
 import re
+import base64
 import requests
 import telebot
 
@@ -21,7 +23,10 @@ bot = telebot.TeleBot(BOT_TOKEN)
 def analyze_image(image_bytes):
     """Распознавание товара через Cloudflare Workers AI (Llama 3.2 11B Vision)"""
     
-    image_array = list(image_bytes)
+    # Кодируем изображение в base64 data-URL для гарантированной передачи
+    base64_image = base64.b64encode(image_bytes).decode('utf-8')
+    data_url = f"data:image/jpeg;base64,{base64_image}"
+    
     url = f"https://api.cloudflare.com/client/v4/accounts/{CLOUDFLARE_ACCOUNT_ID}/ai/run/@cf/meta/llama-3.2-11b-vision-instruct"
     headers = {
         "Authorization": f"Bearer {CLOUDFLARE_API_TOKEN}",
@@ -38,24 +43,32 @@ def analyze_image(image_bytes):
         "}\n\n"
         "Правила:\n"
         "1. Поле 'price' должно быть числом (Float/Int) — средняя примерная цена товара в сомах (KGS).\n"
-        "2. Выведи ТОЛЬКО JSON-объект. Не добавляй никакого лишнего текста до или после JSON."
+        "2. Выведи ТОЛЬКО JSON-объект. Не добавляй никаких пояснений, тегов или текстов вокруг."
     )
 
+    # Запрос с передачей изображений через роли
     payload = {
-        "prompt": prompt,
-        "image": image_array,
+        "messages": [
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {"url": data_url}}
+                ]
+            }
+        ],
         "max_tokens": 500
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=30)
+    response = requests.post(url, headers=headers, json=payload, timeout=35)
     res_data = response.json()
 
-    # Автоматическое принятие соглашения лицензии Llama 3.2 (при первом вызове)
+    # Автоматическое принятие лицензии при первом вызове
     if not res_data.get("success"):
         errors_str = str(res_data.get("errors", []))
         if "Model Agreement" in errors_str or "agree" in errors_str:
             requests.post(url, headers=headers, json={"prompt": "agree"}, timeout=15)
-            response = requests.post(url, headers=headers, json=payload, timeout=30)
+            response = requests.post(url, headers=headers, json=payload, timeout=35)
             res_data = response.json()
 
     if not res_data.get("success"):
@@ -63,24 +76,34 @@ def analyze_image(image_bytes):
         raise ValueError(f"Cloudflare API Error: {errors}")
 
     result = res_data.get("result", {})
-    raw_response = result.get("response", "")
+    
+    # Извлечение текста ответа из разного типа структур Cloudflare
+    if "response" in result:
+        raw_response = result["response"]
+    elif "choices" in result and len(result["choices"]) > 0:
+        raw_response = result["choices"][0].get("message", {}).get("content", "")
+    else:
+        raw_response = str(result)
 
-    # Корректное извлечение текста в зависимости от типа структуры ответа
     if isinstance(raw_response, dict):
-        raw_text = str(raw_response.get("description") or raw_response.get("content") or json.dumps(raw_response))
-    elif isinstance(raw_response, list):
-        raw_text = " ".join([str(item) for item in raw_response])
+        raw_text = str(raw_response.get("content") or raw_response.get("description") or "")
     else:
         raw_text = str(raw_response)
 
     raw_text = raw_text.strip()
 
-    # Извлечение чистой структуры JSON из ответа
+    # Удаляем фоновую разметку ```json ... ```
+    raw_text = re.sub(r'```(?:json)?', '', raw_text).strip()
+
+    # Извлекаем фигурные скобки JSON
     json_match = re.search(r'\{.*\}', raw_text, re.DOTALL)
     if json_match:
-        clean_json_str = json_match.group(0)
+        clean_json_str = json_match.group(0).strip()
     else:
         clean_json_str = raw_text
+
+    if not clean_json_str:
+        raise ValueError("Модель вернула пустой ответ. Попробуйте еще раз.")
 
     return json.loads(clean_json_str)
 
@@ -89,8 +112,8 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Привет! Бот переведен на Cloudflare Workers AI.\n"
-        "Отправляй фото товаров, и я загружу их на сайт!"
+        "Привет! Бот работает на базе Cloudflare Workers AI.\n"
+        "Отправляй фото товаров, и я добавлю их на сайт!"
     )
 
 @bot.message_handler(content_types=['photo'])
