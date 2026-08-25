@@ -1,3 +1,4 @@
 pyTelegramBotAPI
 google-genai
+google-api-core
 requests
