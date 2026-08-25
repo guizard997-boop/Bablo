@@ -16,9 +16,6 @@ RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products
 bot = telebot.TeleBot(BOT_TOKEN)
 ai_client = genai.Client(api_key=GEMINI_API_KEY)
 
-# Кэш для предотвращения повторной обработки альбомов фото
-processed_media_groups = set()
-
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
     """Запрос к Gemini через SDK google-genai"""
@@ -35,21 +32,18 @@ def analyze_image(image_bytes):
         "2. Не добавляй абсолютно никакого текста, кроме чистого JSON."
     )
     
-    # Передача байтов изображения
     image_part = types.Part.from_bytes(
         data=image_bytes,
         mime_type='image/jpeg'
     )
     
-    # Вызов модели gemini-3.6-flash
     response = ai_client.models.generate_content(
-        model='gemini-3.6-flash',
+        model='gemini-2.5-flash',
         contents=[image_part, prompt]
     )
     
     raw_text = response.text.strip()
     
-    # Очистка Markdown разметки ```json ... ```
     if raw_text.startswith("```json"):
         raw_text = raw_text[7:]
     if raw_text.startswith("```"):
@@ -64,43 +58,35 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Привет! Отправь мне фото канцелярского товара, и я распознаю его через Gemini, "
-        "сформирую JSON с ценой в сомах и автоматически добавлю на сайт!"
+        "Привет! Отправь мне фото (или сразу до 10 фото альбомом), "
+        "и я распознаю каждый товар через Gemini и добавлю их на сайт!"
     )
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    # Защита от спама при отправке альбома
-    if message.media_group_id:
-        if message.media_group_id in processed_media_groups:
-            return
-        processed_media_groups.add(message.media_group_id)
-        if len(processed_media_groups) > 100:
-            processed_media_groups.clear()
-
-    status_msg = bot.reply_to(message, "⏳ Скачиваю фото...")
+    status_msg = bot.reply_to(message, "⏳ Обрабатываю фото...")
     
     try:
-        # 1. Скачивание файла
+        # 1. Скачивание текущего фото из пачки
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        # 2. Генерация через Gemini
-        bot.edit_message_text("🤖 Gemini генерирует JSON-данные и цену...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        # 2. Анализ через Gemini
+        bot.edit_message_text("🤖 Анализирую товар...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         try:
             data = analyze_image(downloaded_file)
         except Exception as ai_err:
             err_text = str(ai_err)[:300]
-            bot.edit_message_text(f"❌ Ошибка при запросе к Gemini:\n{err_text}", chat_id=message.chat.id, message_id=status_msg.message_id)
+            bot.edit_message_text(f"❌ Ошибка Gemini:\n{err_text}", chat_id=message.chat.id, message_id=status_msg.message_id)
             return
 
         title = data.get("title", "Товар без названия")
         price = data.get("price", 0.0)
         description = data.get("description", "")
 
-        # 3. Отправка POST-запроса на сайт
-        bot.edit_message_text("🚀 Отправляю данные на сайт...", chat_id=message.chat.id, message_id=status_msg.message_id)
+        # 3. Отправка на сайт
+        bot.edit_message_text("🚀 Загружаю на сайт...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         payload = {
             'title': title,
@@ -111,12 +97,12 @@ def handle_photo(message):
             'image': ('photo.jpg', downloaded_file, 'image/jpeg')
         }
         
-        response = requests.post(RAILWAY_API_URL, data=payload, files=files, timeout=15)
+        response = requests.post(RAILWAY_API_URL, data=payload, files=files, timeout=20)
         
         if response.status_code in [200, 201]:
-            safe_desc = str(description)[:500]
+            safe_desc = str(description)[:300]
             bot.edit_message_text(
-                f"✅ **Товар успешно добавлен на сайт!**\n\n"
+                f"✅ **Товар добавлен!**\n\n"
                 f"📌 **Название:** {title}\n"
                 f"💰 **Цена:** {price} сом\n"
                 f"📝 **Описание:** {safe_desc}", 
@@ -127,7 +113,7 @@ def handle_photo(message):
         else:
             clean_error_text = response.text[:150].replace('<', '&lt;').replace('>', '&gt;')
             bot.edit_message_text(
-                f"❌ Ошибка сервера сайта ({response.status_code}):\n{clean_error_text}", 
+                f"❌ Ошибка сервера ({response.status_code}):\n{clean_error_text}", 
                 chat_id=message.chat.id, 
                 message_id=status_msg.message_id
             )
@@ -135,12 +121,12 @@ def handle_photo(message):
     except Exception as e:
         safe_exception = str(e)[:300].replace('<', '&lt;').replace('>', '&gt;')
         bot.edit_message_text(
-            f"❌ Ошибка работы бота:\n{safe_exception}", 
+            f"❌ Ошибка обработки:\n{safe_exception}", 
             chat_id=message.chat.id, 
             message_id=status_msg.message_id
         )
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот запущен и готов к работе...")
-    bot.infinity_polling(timeout=10, long_polling_timeout=5)
+    print("Бот запущен и готов к пакетной загрузке...")
+    bot.infinity_polling(timeout=20, long_polling_timeout=10)
