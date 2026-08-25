@@ -18,7 +18,7 @@ groq_client = Groq(api_key=GROQ_API_KEY)
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Распознавание товара через Groq Vision API"""
+    """Распознавание товара через актуальную модель Groq Vision API"""
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     data_url = f"data:image/jpeg;base64,{base64_image}"
     
@@ -35,8 +35,9 @@ def analyze_image(image_bytes):
         "2. Не добавляй абсолютно никакого текста, кроме чистого JSON."
     )
     
+    # Используем актуальную поддерживаемую модель llama-3.2-90b-vision-preview
     response = groq_client.chat.completions.create(
-        model="llama-3.2-11b-vision-preview",
+        model="llama-3.2-90b-vision-preview",
         messages=[
             {
                 "role": "user",
@@ -66,7 +67,7 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id, 
-        "Привет! Бот переведен на Groq API. "
+        "Привет! Бот работает на базе Groq API (Llama 3.2 Vision).\n"
         "Отправляй фото товаров (можно альбомом до 10 штук), и я добавлю их на сайт!"
     )
 
@@ -133,5 +134,5 @@ def handle_photo(message):
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот успешно запущен на базе Groq API...")
+    print("Бот успешно запущен на базе актуальной модели Groq Vision...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
