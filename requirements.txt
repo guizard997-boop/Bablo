@@ -1,4 +1,4 @@
 pyTelegramBotAPI
-google-genai
-google-api-core
+groq
 requests
+
