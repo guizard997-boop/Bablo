@@ -21,7 +21,7 @@ processed_media_groups = set()
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ====================
 def analyze_image(image_bytes):
-    """Запрос к Gemini через актуальный SDK google-genai и модель gemini-3.6-flash"""
+    """Запрос к Gemini через SDK google-genai"""
     prompt = (
         "Проанализируй этот канцелярский товар на фото.\n"
         "Сформируй JSON-ответ строго в таком формате:\n"
@@ -35,12 +35,13 @@ def analyze_image(image_bytes):
         "2. Не добавляй абсолютно никакого текста, кроме чистого JSON."
     )
     
-    # Правильный способ передачи байтов изображения в новой библиотеке google-genai
+    # Передача байтов изображения
     image_part = types.Part.from_bytes(
         data=image_bytes,
         mime_type='image/jpeg'
     )
     
+    # Вызов модели gemini-3.6-flash
     response = ai_client.models.generate_content(
         model='gemini-3.6-flash',
         contents=[image_part, prompt]
@@ -69,7 +70,7 @@ def start_cmd(message):
 
 @bot.message_handler(content_types=['photo'])
 def handle_photo(message):
-    # Если отправлен альбом (несколько фото сразу), обрабатываем только 1-е фото из группы
+    # Защита от спама при отправке альбома
     if message.media_group_id:
         if message.media_group_id in processed_media_groups:
             return
@@ -84,7 +85,7 @@ def handle_photo(message):
         file_info = bot.get_file(message.photo[-1].file_id)
         downloaded_file = bot.download_file(file_info.file_path)
         
-        # 2. Генерация описания и цены через Gemini
+        # 2. Генерация через Gemini
         bot.edit_message_text("🤖 Gemini генерирует JSON-данные и цену...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         try:
@@ -98,7 +99,7 @@ def handle_photo(message):
         price = data.get("price", 0.0)
         description = data.get("description", "")
 
-        # 3. Отправка POST-запроса на Railway API
+        # 3. Отправка POST-запроса на сайт
         bot.edit_message_text("🚀 Отправляю данные на сайт...", chat_id=message.chat.id, message_id=status_msg.message_id)
         
         payload = {
