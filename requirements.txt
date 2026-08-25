@@ -1,4 +1,5 @@
 pyTelegramBotAPI
-groq
 requests
+Pillow
+
 
