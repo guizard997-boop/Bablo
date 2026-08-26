@@ -17,7 +17,7 @@ RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
-# ==================== ВПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ИИ ====================
+# ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ИИ ====================
 
 def analyze_with_gemini(image_bytes):
     """Основной метод: Распознавание товара через Gemini API"""
@@ -40,7 +40,7 @@ def analyze_with_gemini(image_bytes):
     )
 
     response = client.models.generate_content(
-        model='gemini-3.6-flash',
+        model='gemini-2.5-flash',
         contents=[
             types.Part.from_bytes(
                 data=image_bytes,
@@ -134,7 +134,7 @@ def start_cmd(message):
     bot.send_message(
         message.chat.id,
         "Приветствую! Бот работает на базе Gemini API с автоматическим резервом на Hugging Face (Moondream2).\n"
-        "Отправляйте фото канцелярских товаров, и я добавлю их в каталог вашeго сайта!"
+        "Отправляйте фото канцелярских товаров, и я добавлю их в каталог вашего сайта!"
     )
 
 @bot.message_handler(content_types=['photo'])
@@ -151,8 +151,7 @@ def handle_photo(message):
             data, provider_used = analyze_image(downloaded_file)
         except Exception as ai_err:
             err_text = str(ai_err)[:300]
-            bot.edit_message_text(f"❌ Ошибка распознавания (все ИИ недоступны):
-{err_text}", chat_id=message.chat.id, message_id=status_msg.message_id)
+            bot.edit_message_text(f"❌ Ошибка распознавания (все ИИ недоступны):\n{err_text}", chat_id=message.chat.id, message_id=status_msg.message_id)
             return
 
         title = data.get("title", "Товар без названия")
@@ -175,16 +174,10 @@ def handle_photo(message):
         if response.status_code in [200, 201]:
             safe_desc = str(description)[:300]
             bot.edit_message_text(
-                f"✅ **Товар успешно добавлен!**
-
-"
-                f"📌 **Название:** {title}
-"
-                f"💰 **Цена:** {price} сом
-"
-                f"📝 **Описание:** {safe_desc}
-
-"
+                f"✅ **Товар успешно добавлен!**\n\n"
+                f"📌 **Название:** {title}\n"
+                f"💰 **Цена:** {price} сом\n"
+                f"📝 **Описание:** {safe_desc}\n\n"
                 f"🤖 *Провайдер ИИ:* {provider_used}",
                 chat_id=message.chat.id,
                 message_id=status_msg.message_id,
@@ -193,8 +186,7 @@ def handle_photo(message):
         else:
             clean_error_text = response.text[:150].replace('<', '&lt;').replace('>', '&gt;')
             bot.edit_message_text(
-                f"❌ Ошибка сервера сайта ({response.status_code}):
-{clean_error_text}",
+                f"❌ Ошибка сервера сайта ({response.status_code}):\n{clean_error_text}",
                 chat_id=message.chat.id,
                 message_id=status_msg.message_id
             )
@@ -202,8 +194,7 @@ def handle_photo(message):
     except Exception as e:
         safe_exception = str(e)[:300].replace('<', '&lt;').replace('>', '&gt;')
         bot.edit_message_text(
-            f"❌ Ошибка работы бота:
-{safe_exception}",
+            f"❌ Ошибка работы бота:\n{safe_exception}",
             chat_id=message.chat.id,
             message_id=status_msg.message_id
         )
