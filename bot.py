@@ -12,8 +12,10 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "ВАШ_GEMINI_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN", "ВАШ_HUGGINGFACE_TOKEN")
 
-# Актуальный адрес вебхука на Railway
-RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/setup-webhook"
+# Основной эндпоинт сайта для сохранения товаров
+RAILWAY_BASE_URL = "https://mircancelyarii-production.up.railway.app"
+PRIMARY_API_URL = f"{RAILWAY_BASE_URL}/api/products"
+FALLBACK_API_URL = f"{RAILWAY_BASE_URL}/api/product"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -169,7 +171,10 @@ def handle_photo(message):
             'image': ('photo.jpg', downloaded_file, 'image/jpeg')
         }
 
-        response = requests.post(RAILWAY_API_URL, data=payload, files=files, timeout=20)
+        # Отправка данных на сайт (с автопереключением эндпоинта)
+        response = requests.post(PRIMARY_API_URL, data=payload, files=files, timeout=20)
+        if response.status_code == 404:
+            response = requests.post(FALLBACK_API_URL, data=payload, files=files, timeout=20)
 
         if response.status_code in [200, 201]:
             safe_desc = str(description)[:300]
