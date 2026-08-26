@@ -13,7 +13,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "ВАШ_GEMINI_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN", "ВАШ_HUGGINGFACE_TOKEN")
 
 # API вашего сайта на Railway
-RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/setup-webhook"
+RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -40,7 +40,7 @@ def analyze_with_gemini(image_bytes):
     )
 
     response = client.models.generate_content(
-        model='gemini-3.6-flash',
+        model='gemini-2.5-flash',
         contents=[
             types.Part.from_bytes(
                 data=image_bytes,
@@ -118,7 +118,7 @@ def analyze_image(image_bytes):
     """Каскадный анализ: сначала Gemini, в случае ошибки/лимитов — Hugging Face"""
     try:
         data = analyze_with_gemini(image_bytes)
-        return data, "Gemini 3.6 Flash"
+        return data, "Gemini 2.5 Flash"
     except Exception as gemini_err:
         print(f"Gemini недоступен ({gemini_err}), переключаюсь на Hugging Face...")
         try:
