@@ -1,4 +1,4 @@
-import os
+,import os
 import json
 import re
 import base64
@@ -36,7 +36,7 @@ def analyze_with_gemini(image_bytes):
     )
 
     last_err = None
-    for model in ("gemini-2.0-flash", "gemini-1.5-flash", "gemini-1.5-flash-latest"):
+    for model in ("gemini-3.6-flash", "gemini-1.5-flash", "gemini-1.5-flash-latest"):
         try:
             url = (
                 f"https://generativelanguage.googleapis.com/v1beta/models/"
