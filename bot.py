@@ -13,7 +13,7 @@ GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "ВАШ_GEMINI_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN", "ВАШ_HUGGINGFACE_TOKEN")
 
 # API вашего сайта на Railway
-RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/api/products"
+RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/telegram-webhook"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
