@@ -12,15 +12,15 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "ВАШ_GEMINI_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN", "ВАШ_HUGGINGFACE_TOKEN")
 
-# API вашего сайта на Railway
-RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/telegram-webhook"
+# API вашего сайта на Railway (для загрузки товаров в базу данных)
+RAILWAY_API_URL = "[https://mircancelyarii-production.up.railway.app/api/products](https://mircancelyarii-production.up.railway.app/api/products)"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
 # ==================== ВСПОМОГАТЕЛЬНЫЕ ФУНКЦИИ ИИ ====================
 
 def analyze_with_gemini(image_bytes):
-    """Основной метод: Распознавание товара через Gemini API"""
+    """Основной метод: Распознавание товара через Gemini API (версия 3.6 Flash)"""
     if not GEMINI_API_KEY or GEMINI_API_KEY == "ВАШ_GEMINI_API_KEY":
         raise ValueError("GEMINI_API_KEY не настроен")
 
@@ -66,7 +66,7 @@ def analyze_with_hf(image_bytes):
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     data_url = f"data:image/jpeg;base64,{base64_image}"
 
-    url = "https://router.huggingface.co/hf-inference/v1/chat/completions"
+    url = "[https://router.huggingface.co/hf-inference/v1/chat/completions](https://router.huggingface.co/hf-inference/v1/chat/completions)"
     headers = {
         "Authorization": f"Bearer {clean_hf_token}",
         "Content-Type": "application/json"
@@ -115,7 +115,7 @@ def analyze_with_hf(image_bytes):
 
 
 def analyze_image(image_bytes):
-    """Каскадный анализ: сначала Gemini, в случае ошибки/лимитов — Hugging Face"""
+    """Каскадный анализ: сначала Gemini 3.6 Flash, в случае ошибки — Hugging Face"""
     try:
         data = analyze_with_gemini(image_bytes)
         return data, "Gemini 3.6 Flash"
@@ -133,7 +133,7 @@ def analyze_image(image_bytes):
 def start_cmd(message):
     bot.send_message(
         message.chat.id,
-        "Приветствую! Бот работает на базе Gemini API с автоматическим резервом на Hugging Face (Moondream2).\n"
+        "Приветствую! Бот работает на базе Gemini 3.6 Flash с автоматическим резервом на Hugging Face (Moondream2).\n"
         "Отправляйте фото канцелярских товаров, и я добавлю их в каталог вашего сайта!"
     )
 
@@ -201,5 +201,5 @@ def handle_photo(message):
 
 # ==================== ЗАПУСК БОТА ====================
 if __name__ == '__main__':
-    print("Бот успешно запущен (Gemini + HF Fallback)...")
+    print("Бот успешно запущен (Gemini 3.6 + HF Fallback)...")
     bot.infinity_polling(timeout=20, long_polling_timeout=10)
