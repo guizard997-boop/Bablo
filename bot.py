@@ -12,8 +12,8 @@ BOT_TOKEN = os.getenv("BOT_TOKEN", "ВАШ_TELEGRAM_BOT_TOKEN")
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY", "ВАШ_GEMINI_API_KEY")
 HF_TOKEN = os.getenv("HF_TOKEN", "ВАШ_HUGGINGFACE_TOKEN")
 
-# API вашего сайта на Railway (для загрузки товаров в базу данных)
-RAILWAY_API_URL = "[https://mircancelyarii-production.up.railway.app/api/products](https://mircancelyarii-production.up.railway.app/api/products)"
+# Актуальный адрес вебхука на Railway
+RAILWAY_API_URL = "https://mircancelyarii-production.up.railway.app/setup-webhook"
 
 bot = telebot.TeleBot(BOT_TOKEN)
 
@@ -66,7 +66,7 @@ def analyze_with_hf(image_bytes):
     base64_image = base64.b64encode(image_bytes).decode('utf-8')
     data_url = f"data:image/jpeg;base64,{base64_image}"
 
-    url = "[https://router.huggingface.co/hf-inference/v1/chat/completions](https://router.huggingface.co/hf-inference/v1/chat/completions)"
+    url = "https://router.huggingface.co/hf-inference/v1/chat/completions"
     headers = {
         "Authorization": f"Bearer {clean_hf_token}",
         "Content-Type": "application/json"
